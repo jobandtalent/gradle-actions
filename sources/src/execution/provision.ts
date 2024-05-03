@@ -7,7 +7,7 @@ import * as cache from '@actions/cache'
 import * as toolCache from '@actions/tool-cache'
 
 import * as gradlew from './gradlew'
-import {handleCacheFailure} from '../caching/cache-utils'
+import {getInputS3ClientConfig, handleCacheFailure} from '../caching/cache-utils'
 import {CacheConfig} from '../configuration'
 
 const gradleVersionsBaseUrl = 'https://services.gradle.org/versions'
@@ -130,7 +130,18 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     const cacheKey = `gradle-${versionInfo.version}`
     try {
-        const restoreKey = await cache.restoreCache([downloadPath], cacheKey)
+        const s3BucketName = core.getInput('aws-s3-bucket')
+        const s3config = getInputS3ClientConfig()
+
+        const restoreKey = await cache.restoreCache(
+            [downloadPath].slice(),
+            cacheKey,
+            undefined,
+            undefined,
+            undefined,
+            s3config,
+            s3BucketName
+        )
         if (restoreKey) {
             core.info(`Restored Gradle distribution ${cacheKey} from cache to ${downloadPath}`)
             return downloadPath
@@ -144,7 +155,10 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     if (!cacheConfig.isCacheReadOnly()) {
         try {
-            await cache.saveCache([downloadPath], cacheKey)
+            const s3BucketName = core.getInput('aws-s3-bucket')
+            const s3config = getInputS3ClientConfig()
+
+            await cache.saveCache([downloadPath].slice(), cacheKey, undefined, undefined, s3config, s3BucketName)
         } catch (error) {
             handleCacheFailure(error, `Save Gradle distribution ${versionInfo.version} failed`)
         }
