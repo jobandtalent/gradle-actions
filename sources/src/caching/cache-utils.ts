@@ -169,7 +169,6 @@ export function getInputS3ClientConfig(): S3ClientConfig | undefined {
             sessionToken: core.getInput('aws-session-token') || process.env['AWS_SESSION_TOKEN']
         },
         region: core.getInput('aws-region') || process.env['AWS_REGION'],
-        endpoint: core.getInput('aws-endpoint'),
         bucketEndpoint: core.getBooleanInput('aws-s3-bucket-endpoint'),
         forcePathStyle: core.getBooleanInput('aws-s3-force-path-style')
     } as S3ClientConfig
