@@ -246,9 +246,6 @@ inputs:
   aws-region:
     description: 'An AWS region where the bucket is located'
     required: false
-  aws-endpoint:
-    description: 'An endpoint of AWS S3 (for compatible software)'
-    required: false
   aws-s3-bucket-endpoint:
     description: 'Whether to use the bucket name as the endpoint for this request.'
     required: false
