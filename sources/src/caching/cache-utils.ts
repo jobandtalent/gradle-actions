@@ -46,7 +46,9 @@ export async function restoreCache(
             : {segmentTimeoutInMs: SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT}
 
         const s3BucketName = core.getInput('aws-s3-bucket')
+        core.info(`S3 bucket: ${s3BucketName}`)
         const s3config = getInputS3ClientConfig()
+        core.info(`S3 config: ${s3config}`)
 
         const restoredEntry = await cache.restoreCache(
             cachePath.slice(),
