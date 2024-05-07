@@ -105,6 +105,10 @@ export enum DependencyGraphOption {
 
 export class CacheConfig {
     isCacheDisabled(): boolean {
+        if (!cache.isFeatureAvailable()) {
+            return true
+        }
+
         return getBooleanInput('cache-disabled')
     }
 
