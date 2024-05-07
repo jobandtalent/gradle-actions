@@ -46,9 +46,7 @@ export async function restoreCache(
             : {segmentTimeoutInMs: SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT}
 
         const s3BucketName = core.getInput('aws-s3-bucket')
-        core.info(`S3 bucket: ${s3BucketName}`)
         const s3config = getInputS3ClientConfig()
-        core.info(`S3 config: ${s3config}`)
 
         const restoredEntry = await cache.restoreCache(
             cachePath.slice(),
@@ -176,7 +174,7 @@ export function getInputS3ClientConfig(): S3ClientConfig | undefined {
         forcePathStyle: core.getBooleanInput('aws-s3-force-path-style')
     } as S3ClientConfig
 
-    core.debug('Enable S3 backend mode.')
+    core.debug(`Enable S3 backend mode. ${JSON.stringify(s3config, null, 2)}`)
 
     return s3config
 }
