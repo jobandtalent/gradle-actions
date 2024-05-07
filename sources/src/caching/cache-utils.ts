@@ -171,7 +171,7 @@ export function getInputS3ClientConfig(): S3ClientConfig | undefined {
         region: core.getInput('aws-region') || process.env['AWS_REGION']
     } as S3ClientConfig
 
-    core.debug(`Enable S3 backend mode. ${JSON.stringify(s3config, null, 2)}`)
+    core.debug(`Enable S3 backend mode.`)
 
     return s3config
 }
