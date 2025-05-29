@@ -7,7 +7,6 @@ import * as path from 'path'
 import * as fs from 'fs'
 
 import {CacheEntryListener} from './cache-reporting'
-// eslint-disable-next-line import/named
 import {S3ClientConfig} from '@aws-sdk/client-s3'
 
 const SEGMENT_DOWNLOAD_TIMEOUT_VAR = 'SEGMENT_DOWNLOAD_TIMEOUT_MINS'
