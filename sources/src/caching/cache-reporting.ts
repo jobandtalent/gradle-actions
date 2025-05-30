@@ -16,7 +16,6 @@ export class CacheListener {
     }
 
     get cacheStatus(): string {
-        if (!cache.isFeatureAvailable()) return 'not available'
         if (this.cacheDisabled) return this.cacheDisabledReason
         if (this.cacheWriteOnly) return 'write-only'
         if (this.cacheReadOnly) return 'read-only'

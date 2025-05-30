@@ -1,14 +1,13 @@
 import * as core from '@actions/core'
 import * as cache from '@actions/cache'
 import * as exec from '@actions/exec'
+import {S3ClientConfig} from '@aws-sdk/client-s3'
 
 import * as crypto from 'crypto'
 import * as path from 'path'
 import * as fs from 'fs'
 
 import {CacheEntryListener} from './cache-reporting'
-// eslint-disable-next-line import/named
-import {S3ClientConfig} from '@aws-sdk/client-s3'
 
 const SEGMENT_DOWNLOAD_TIMEOUT_VAR = 'SEGMENT_DOWNLOAD_TIMEOUT_MINS'
 const SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT = 10 * 60 * 1000 // 10 minutes
