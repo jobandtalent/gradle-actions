@@ -168,7 +168,9 @@ export function getInputS3ClientConfig(): S3ClientConfig | undefined {
             secretAccessKey: core.getInput('aws-secret-access-key') || process.env['AWS_SECRET_ACCESS_KEY'],
             sessionToken: core.getInput('aws-session-token') || process.env['AWS_SESSION_TOKEN']
         },
-        region: core.getInput('aws-region') || process.env['AWS_REGION']
+        region: core.getInput('aws-region') || process.env['AWS_REGION'],
+        bucketEndpoint: core.getBooleanInput('aws-s3-bucket-endpoint'),
+        forcePathStyle: core.getBooleanInput('aws-s3-force-path-style')
     } as S3ClientConfig
 
     core.debug(`Enable S3 backend mode. ${JSON.stringify(s3config, null, 2)}`)
