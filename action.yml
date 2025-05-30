@@ -5,7 +5,7 @@ runs:
   using: "composite"
   steps:
   - run: |
-      echo "::error::The path 'mateherber-jt/gradle-actions' is not a valid action. Please use 'mateherber-jt/gradle-actions/setup-gradle' or 'mateherber-jt/gradle-actions/dependency-submission'."
+      echo "::error::The path 'gradle/actions' is not a valid action. Please use 'gradle/actions/setup-gradle' or 'gradle/actions/dependency-submission'."
       exit 1
     shell: bash
 

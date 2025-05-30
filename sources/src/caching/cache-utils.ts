@@ -1,7 +1,6 @@
 import * as core from '@actions/core'
 import * as cache from '@actions/cache'
 import * as exec from '@actions/exec'
-import {S3ClientConfig} from '@aws-sdk/client-s3'
 
 import * as crypto from 'crypto'
 import * as path from 'path'
@@ -43,19 +42,7 @@ export async function restoreCache(
         const cacheRestoreOptions = process.env[SEGMENT_DOWNLOAD_TIMEOUT_VAR]
             ? {}
             : {segmentTimeoutInMs: SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT}
-
-        const s3BucketName = core.getInput('aws-s3-bucket')
-        const s3config = getInputS3ClientConfig()
-
-        const restoredEntry = await cache.restoreCache(
-            cachePath.slice(),
-            cacheKey,
-            cacheRestoreKeys,
-            cacheRestoreOptions,
-            undefined,
-            s3config,
-            s3BucketName
-        )
+        const restoredEntry = await cache.restoreCache(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
         if (restoredEntry !== undefined) {
             listener.markRestored(restoredEntry.key, restoredEntry.size)
         }
@@ -69,16 +56,7 @@ export async function restoreCache(
 
 export async function saveCache(cachePath: string[], cacheKey: string, listener: CacheEntryListener): Promise<void> {
     try {
-        const s3BucketName = core.getInput('aws-s3-bucket')
-        const s3config = getInputS3ClientConfig()
-        const savedEntry = await cache.saveCache(
-            cachePath.slice(),
-            cacheKey,
-            undefined,
-            undefined,
-            s3config,
-            s3BucketName
-        )
+        const savedEntry = await cache.saveCache(cachePath, cacheKey)
         listener.markSaved(savedEntry.key, savedEntry.size)
     } catch (error) {
         if (error instanceof cache.ReserveCacheError) {
@@ -153,27 +131,4 @@ async function delay(ms: number): Promise<void> {
 async function getJavaProcesses(): Promise<string> {
     const jpsOutput = await exec.getExecOutput('jps', ['-lm'])
     return jpsOutput.stdout
-}
-
-export function getInputS3ClientConfig(): S3ClientConfig | undefined {
-    const s3BucketName = core.getInput('aws-s3-bucket')
-    if (!s3BucketName) {
-        return undefined
-    }
-
-    const s3config = {
-        credentials: {
-            accessKeyId: core.getInput('aws-access-key-id') || process.env['AWS_ACCESS_KEY_ID'],
-            secretAccessKey: core.getInput('aws-secret-access-key') || process.env['AWS_SECRET_ACCESS_KEY'],
-            sessionToken: core.getInput('aws-session-token') || process.env['AWS_SESSION_TOKEN']
-        },
-        region: core.getInput('aws-region') || process.env['AWS_REGION'],
-        endpoint: core.getInput('aws-endpoint'),
-        bucketEndpoint: core.getBooleanInput('aws-s3-bucket-endpoint'),
-        forcePathStyle: core.getBooleanInput('aws-s3-force-path-style')
-    } as S3ClientConfig
-
-    core.debug('Enable S3 backend mode.')
-
-    return s3config
 }
