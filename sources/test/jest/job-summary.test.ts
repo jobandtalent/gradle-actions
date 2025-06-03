@@ -1,7 +1,8 @@
-import { BuildResult } from '../../src/build-results'
-import { renderSummaryTable } from '../../src/job-summary'
 import dedent from 'dedent'
+import {describe, expect, it} from '@jest/globals'
 
+import {BuildResult} from '../../src/build-results'
+import {renderSummaryTable} from '../../src/job-summary'
 
 const successfulHelpBuild: BuildResult = {
     rootProjectName: 'root',
@@ -10,6 +11,7 @@ const successfulHelpBuild: BuildResult = {
     gradleVersion: '8.0',
     gradleHomeDir: '/opt/gradle',
     buildFailed: false,
+    configCacheHit: false,
     buildScanUri: 'https://scans.gradle.com/s/abc123',
     buildScanFailed: false
 }

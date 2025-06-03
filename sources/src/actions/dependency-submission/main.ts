@@ -1,6 +1,7 @@
-import * as setupGradle from '../setup-gradle'
-import * as gradle from '../execution/gradle'
-import * as dependencyGraph from '../dependency-graph'
+import * as core from '@actions/core'
+import * as setupGradle from '../../setup-gradle'
+import * as gradle from '../../execution/gradle'
+import * as dependencyGraph from '../../dependency-graph'
 
 import {parseArgsStringToArgv} from 'string-argv'
 import {
@@ -9,10 +10,11 @@ import {
     DependencyGraphConfig,
     DependencyGraphOption,
     GradleExecutionConfig,
-    setActionId
-} from '../configuration'
-import {saveDeprecationState} from '../deprecation-collector'
-import {handleMainActionError} from '../errors'
+    setActionId,
+    WrapperValidationConfig
+} from '../../configuration'
+import {saveDeprecationState} from '../../deprecation-collector'
+import {handleMainActionError} from '../../errors'
 
 /**
  * The main entry point for the action, called by Github Actions for the step.
@@ -22,7 +24,10 @@ export async function run(): Promise<void> {
         setActionId('gradle/actions/dependency-submission')
 
         // Configure Gradle environment (Gradle User Home)
-        await setupGradle.setup(new CacheConfig(), new BuildScanConfig())
+        await setupGradle.setup(new CacheConfig(), new BuildScanConfig(), new WrapperValidationConfig())
+
+        // Capture the enabled state of dependency-graph
+        const originallyEnabled = process.env['GITHUB_DEPENDENCY_GRAPH_ENABLED']
 
         // Configure the dependency graph submission
         const config = new DependencyGraphConfig()
@@ -52,6 +57,9 @@ export async function run(): Promise<void> {
         )
 
         await dependencyGraph.complete(config)
+
+        // Reset the enabled state of dependency graph
+        core.exportVariable('GITHUB_DEPENDENCY_GRAPH_ENABLED', originallyEnabled)
 
         saveDeprecationState()
     } catch (error) {

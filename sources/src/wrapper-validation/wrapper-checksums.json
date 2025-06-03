@@ -1,5 +1,137 @@
 [
   {
+    "version": "9.0-milestone-5",
+    "checksum": "c605ee1b011c0da3bc468735530c1d43ea3ede0fb8ce978b5479c7f688343ef5"
+  },
+  {
+    "version": "9.0-milestone-4",
+    "checksum": "c605ee1b011c0da3bc468735530c1d43ea3ede0fb8ce978b5479c7f688343ef5"
+  },
+  {
+    "version": "8.14",
+    "checksum": "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172"
+  },
+  {
+    "version": "8.14-rc-3",
+    "checksum": "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172"
+  },
+  {
+    "version": "9.0-milestone-3",
+    "checksum": "c605ee1b011c0da3bc468735530c1d43ea3ede0fb8ce978b5479c7f688343ef5"
+  },
+  {
+    "version": "8.14-rc-2",
+    "checksum": "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172"
+  },
+  {
+    "version": "9.0-milestone-2",
+    "checksum": "c605ee1b011c0da3bc468735530c1d43ea3ede0fb8ce978b5479c7f688343ef5"
+  },
+  {
+    "version": "9.0-milestone-1",
+    "checksum": "9687bf4e8beb2c293cfd1393cbf2854ef68f921757302116033f476289abf7b0"
+  },
+  {
+    "version": "8.14-rc-1",
+    "checksum": "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172"
+  },
+  {
+    "version": "8.14-milestone-8",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-7",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-5",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-4",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.13",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-3",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.13-rc-2",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-2",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.14-milestone-1",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.13-rc-1",
+    "checksum": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+  },
+  {
+    "version": "8.12.1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.13-milestone-3",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.12.1-milestone-1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.13-milestone-2",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.13-milestone-1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.12",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.12-rc-2",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.12-rc-1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11.1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11-rc-3",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11-rc-2",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11-rc-1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
+    "version": "8.11-milestone-1",
+    "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+  },
+  {
     "version": "8.10.2",
     "checksum": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
   },

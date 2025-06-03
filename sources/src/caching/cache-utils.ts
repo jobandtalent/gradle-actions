@@ -7,7 +7,6 @@ import * as path from 'path'
 import * as fs from 'fs'
 
 import {CacheEntryListener} from './cache-reporting'
-// eslint-disable-next-line import/named
 import {S3ClientConfig} from '@aws-sdk/client-s3'
 
 const SEGMENT_DOWNLOAD_TIMEOUT_VAR = 'SEGMENT_DOWNLOAD_TIMEOUT_MINS'
@@ -40,6 +39,7 @@ export async function restoreCache(
 ): Promise<cache.CacheEntry | undefined> {
     listener.markRequested(cacheKey, cacheRestoreKeys)
     try {
+        const startTime = Date.now()
         // Only override the read timeout if the SEGMENT_DOWNLOAD_TIMEOUT_MINS env var has NOT been set
         const cacheRestoreOptions = process.env[SEGMENT_DOWNLOAD_TIMEOUT_VAR]
             ? {}
@@ -58,7 +58,9 @@ export async function restoreCache(
             s3BucketName
         )
         if (restoredEntry !== undefined) {
-            listener.markRestored(restoredEntry.key, restoredEntry.size)
+            const restoreTime = Date.now() - startTime
+            listener.markRestored(restoredEntry.key, restoredEntry.size, restoreTime)
+            core.info(`Restored cache entry with key ${cacheKey} to ${cachePath.join()} in ${restoreTime}ms`)
         }
         return restoredEntry
     } catch (error) {
@@ -70,6 +72,7 @@ export async function restoreCache(
 
 export async function saveCache(cachePath: string[], cacheKey: string, listener: CacheEntryListener): Promise<void> {
     try {
+        const startTime = Date.now()
         const s3BucketName = core.getInput('aws-s3-bucket')
         const s3config = getInputS3ClientConfig()
         const savedEntry = await cache.saveCache(
@@ -80,7 +83,9 @@ export async function saveCache(cachePath: string[], cacheKey: string, listener:
             s3config,
             s3BucketName
         )
-        listener.markSaved(savedEntry.key, savedEntry.size)
+        const saveTime = Date.now() - startTime
+        listener.markSaved(savedEntry.key, savedEntry.size, saveTime)
+        core.info(`Saved cache entry with key ${cacheKey} from ${cachePath.join()} in ${saveTime}ms`)
     } catch (error) {
         if (error instanceof cache.ReserveCacheError) {
             listener.markAlreadyExists(cacheKey)

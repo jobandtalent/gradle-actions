@@ -5,6 +5,7 @@ on:
     inputs:
       cache-key-prefix:
         type: string
+        default: '0'
       runner-os:
         type: string
         default: '["ubuntu-latest"]'
@@ -17,12 +18,15 @@ env:
   GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: dependency-submission-failures-${{ inputs.cache-key-prefix }}
   GITHUB_DEPENDENCY_GRAPH_REF: 'refs/tags/v0.0.1' # Use a different ref to avoid updating the real dependency graph for the repository
 
+permissions:
+  contents: read
+
 jobs:
-  failing-build:
+  dependency-submission-failures-failing-build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -47,11 +51,11 @@ jobs:
             exit 1
         fi
 
-  unsupported-gradle-version:
+  dependency-submission-failures-unsupported-gradle-version:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -59,7 +63,7 @@ jobs:
       id: gradle-build
       uses: ./dependency-submission
       with:
-        gradle-version: 7.0.1
+        gradle-version: '7.0.1'
         build-root-directory: .github/workflow-samples/groovy-dsl
       continue-on-error: true
     - name: Check step failed
@@ -76,13 +80,13 @@ jobs:
             exit 1
         fi
 
-  insufficient-permissions:
+  dependency-submission-failures-insufficient-permissions:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 

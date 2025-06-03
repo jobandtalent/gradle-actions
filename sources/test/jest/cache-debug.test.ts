@@ -1,5 +1,7 @@
 import * as path from 'path'
 import * as fs from 'fs'
+import {describe, expect, it} from '@jest/globals'
+
 import {GradleUserHomeCache} from "../../src/caching/gradle-user-home-cache"
 import {CacheConfig} from "../../src/configuration"
 
@@ -8,7 +10,7 @@ fs.rmSync(testTmp, {recursive: true, force: true})
 
 describe("--info and --stacktrace", () => {
     describe("will be created", () => {
-        it("when gradle.properties does not exists", async () => {
+        it("when gradle.properties does not exist", async () => {
             const emptyGradleHome = `${testTmp}/empty-gradle-home`
             fs.mkdirSync(emptyGradleHome, {recursive: true})
 

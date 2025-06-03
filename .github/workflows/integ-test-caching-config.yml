@@ -5,9 +5,10 @@ on:
     inputs:
       cache-key-prefix:
         type: string
+        default: '0'
       runner-os:
         type: string
-        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+        default: '["ubuntu-latest"]'
       skip-dist:
         type: boolean
         default: false
@@ -16,16 +17,20 @@ env:
   SKIP_DIST: ${{ inputs.skip-dist }}
   GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: caching-config-${{ inputs.cache-key-prefix }}
 
+permissions:
+  contents: read
+
 jobs:
-  seed-build:
+  caching-config-seed-build:
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -46,16 +51,17 @@ jobs:
       run: ./gradlew test
 
   # Test that the gradle-user-home cache will cache dependencies, by running build with --offline
-  verify-build:
-    needs: seed-build
+  caching-config-verify-build:
+    needs: caching-config-seed-build
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -75,15 +81,16 @@ jobs:
       run: ./gradlew test --offline
 
   # Test that build scans are captured when caching is explicitly disabled
-  cache-disabled:
+  caching-config-cache-disabled:
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -97,17 +104,17 @@ jobs:
       run: ./gradlew help
     - name: Check Build Scan url is captured
       if: ${{ !steps.gradle.outputs.build-scan-url }}
-      uses: actions/github-script@v7
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
           core.setFailed('No Build Scan detected')
 
   # Test that build scans are captured when caching is disabled because Gradle User Home already exists
-  cache-disabled-pre-existing-gradle-home:
+  caching-config-cache-disabled-pre-existing-gradle-home:
     runs-on: ubuntu-latest # This test only runs on Ubuntu
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -121,23 +128,24 @@ jobs:
       run: ./gradlew help
     - name: Check Build Scan url is captured
       if: ${{ !steps.gradle.outputs.build-scan-url }}
-      uses: actions/github-script@v7
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       with:
         script: |
           core.setFailed('No Build Scan detected')
 
   # Test seed the cache with cache-write-only and verify with cache-read-only
-  seed-build-write-only:
+  caching-config-seed-write-only:
     env:
-      GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ inputs.cache-key-prefix }}-write-only-
+      GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: caching-config-write-only-${{ inputs.cache-key-prefix }}
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -149,18 +157,19 @@ jobs:
       working-directory: .github/workflow-samples/groovy-dsl
       run: ./gradlew test
 
-  verify-write-only-build:
+  caching-config-verify-write-only:
     env:
-      GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ inputs.cache-key-prefix }}-write-only-
-    needs: seed-build-write-only
+      GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: caching-config-write-only-${{ inputs.cache-key-prefix }}
+    needs: caching-config-seed-write-only
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 

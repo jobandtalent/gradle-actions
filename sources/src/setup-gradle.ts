@@ -1,24 +1,34 @@
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
+import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as caches from './caching/caches'
 import * as jobSummary from './job-summary'
-import * as buildScan from './build-scan'
+import * as buildScan from './develocity/build-scan'
 
 import {loadBuildResults, markBuildResultsProcessed} from './build-results'
 import {CacheListener, generateCachingReport} from './caching/cache-reporting'
 import {DaemonController} from './daemon-controller'
-import {BuildScanConfig, CacheConfig, SummaryConfig, getWorkspaceDirectory} from './configuration'
-import {findInvalidWrapperJars} from './wrapper-validation/validate'
-import {JobFailure} from './errors'
+import {
+    BuildScanConfig,
+    CacheConfig,
+    SummaryConfig,
+    WrapperValidationConfig,
+    getWorkspaceDirectory
+} from './configuration'
+import * as wrapperValidator from './wrapper-validation/wrapper-validator'
 
 const GRADLE_SETUP_VAR = 'GRADLE_BUILD_ACTION_SETUP_COMPLETED'
 const USER_HOME = 'USER_HOME'
 const GRADLE_USER_HOME = 'GRADLE_USER_HOME'
 const CACHE_LISTENER = 'CACHE_LISTENER'
 
-export async function setup(cacheConfig: CacheConfig, buildScanConfig: BuildScanConfig): Promise<boolean> {
+export async function setup(
+    cacheConfig: CacheConfig,
+    buildScanConfig: BuildScanConfig,
+    wrapperValidationConfig: WrapperValidationConfig
+): Promise<boolean> {
     const userHome = await determineUserHome()
     const gradleUserHome = await determineGradleUserHome()
 
@@ -41,7 +51,9 @@ export async function setup(cacheConfig: CacheConfig, buildScanConfig: BuildScan
 
     core.saveState(CACHE_LISTENER, cacheListener.stringify())
 
-    buildScan.setup(buildScanConfig)
+    await wrapperValidator.validateWrappers(wrapperValidationConfig, getWorkspaceDirectory(), gradleUserHome)
+
+    await buildScan.setup(buildScanConfig)
 
     return true
 }
@@ -60,7 +72,7 @@ export async function complete(cacheConfig: CacheConfig, summaryConfig: SummaryC
     const cacheListener: CacheListener = CacheListener.rehydrate(core.getState(CACHE_LISTENER))
 
     const daemonController = new DaemonController(buildResults)
-    await caches.save(userHome, gradleUserHome, cacheListener, daemonController, cacheConfig)
+    await caches.save(userHome, gradleUserHome, cacheListener, daemonController, buildResults, cacheConfig)
 
     const cachingReport = generateCachingReport(cacheListener)
     await jobSummary.generateJobSummary(buildResults, cachingReport, summaryConfig)
@@ -79,7 +91,24 @@ async function determineGradleUserHome(): Promise<string> {
         return path.resolve(rootDir, customGradleUserHome)
     }
 
-    return path.resolve(await determineUserHome(), '.gradle')
+    const defaultGradleUserHome = path.resolve(await determineUserHome(), '.gradle')
+    // Use the default Gradle User Home if it already exists
+    if (fs.existsSync(defaultGradleUserHome)) {
+        core.info(`Gradle User Home already exists at ${defaultGradleUserHome}`)
+        core.exportVariable('GRADLE_USER_HOME', defaultGradleUserHome)
+        return defaultGradleUserHome
+    }
+
+    // Switch Gradle User Home to faster 'D:' drive if possible
+    if (os.platform() === 'win32' && defaultGradleUserHome.startsWith('C:\\') && fs.existsSync('D:\\a\\')) {
+        const fasterGradleUserHome = 'D:\\a\\.gradle'
+        core.info(`Setting GRADLE_USER_HOME to ${fasterGradleUserHome} to leverage (potentially) faster drive.`)
+        core.exportVariable('GRADLE_USER_HOME', fasterGradleUserHome)
+        return fasterGradleUserHome
+    }
+
+    core.exportVariable('GRADLE_USER_HOME', defaultGradleUserHome)
+    return defaultGradleUserHome
 }
 
 /**
@@ -97,17 +126,4 @@ async function determineUserHome(): Promise<string> {
     const userHome = found[1]
     core.debug(`Determined user.home from java -version output: '${userHome}'`)
     return userHome
-}
-
-export async function checkNoInvalidWrapperJars(rootDir = getWorkspaceDirectory()): Promise<void> {
-    const allowedChecksums = process.env['ALLOWED_GRADLE_WRAPPER_CHECKSUMS']?.split(',') || []
-    const result = await findInvalidWrapperJars(rootDir, 1, false, allowedChecksums)
-    if (result.isValid()) {
-        core.info(result.toDisplayString())
-    } else {
-        core.info(result.toDisplayString())
-        throw new JobFailure(
-            `Gradle Wrapper Validation Failed!\n  See https://github.com/gradle/actions/blob/main/docs/wrapper-validation.md#reporting-failures\n${result.toDisplayString()}`
-        )
-    }
 }

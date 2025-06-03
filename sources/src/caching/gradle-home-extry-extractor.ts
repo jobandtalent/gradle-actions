@@ -2,15 +2,14 @@ import path from 'path'
 import fs from 'fs'
 import * as core from '@actions/core'
 import * as glob from '@actions/glob'
-import * as semver from 'semver'
 
-import {META_FILE_DIR} from './gradle-user-home-cache'
 import {CacheEntryListener, CacheListener} from './cache-reporting'
 import {cacheDebug, hashFileNames, isCacheDebuggingEnabled, restoreCache, saveCache, tryDelete} from './cache-utils'
 
 import {BuildResult, loadBuildResults} from '../build-results'
-import {CacheConfig} from '../configuration'
+import {CacheConfig, ACTION_METADATA_DIR} from '../configuration'
 import {getCacheKeyBase} from './cache-key'
+import {versionIsAtLeast} from '../execution/gradle'
 
 const SKIP_RESTORE_VAR = 'GRADLE_BUILD_ACTION_SKIP_RESTORE'
 const CACHE_PROTOCOL_VERSION = 'v1'
@@ -133,9 +132,8 @@ abstract class AbstractEntryExtractor {
         pattern: string,
         listener: CacheEntryListener
     ): Promise<ExtractedCacheEntry> {
-        const restoredEntry = await restoreCache([pattern], cacheKey, [], listener)
+        const restoredEntry = await restoreCache(pattern.split('\n'), cacheKey, [], listener)
         if (restoredEntry) {
-            core.info(`Restored ${artifactType} with key ${cacheKey} to ${pattern}`)
             return new ExtractedCacheEntry(artifactType, pattern, cacheKey)
         } else {
             core.info(`Did not restore ${artifactType} with key ${cacheKey} to ${pattern}`)
@@ -233,8 +231,7 @@ abstract class AbstractEntryExtractor {
             cacheDebug(`No change to previously restored ${artifactType}. Not saving.`)
             entryListener.markNotSaved('contents unchanged')
         } else {
-            core.info(`Caching ${artifactType} with path '${pattern}' and cache key: ${cacheKey}`)
-            await saveCache([pattern], cacheKey, entryListener)
+            await saveCache(pattern.split('\n'), cacheKey, entryListener)
         }
 
         for (const file of matchingFiles) {
@@ -298,7 +295,7 @@ abstract class AbstractEntryExtractor {
     }
 
     private getCacheMetadataFile(): string {
-        const actionMetadataDirectory = path.resolve(this.gradleUserHome, META_FILE_DIR)
+        const actionMetadataDirectory = path.resolve(this.gradleUserHome, ACTION_METADATA_DIR)
         fs.mkdirSync(actionMetadataDirectory, {recursive: true})
 
         return path.resolve(actionMetadataDirectory, `${this.extractorName}-entry-metadata.json`)
@@ -435,8 +432,7 @@ export class ConfigurationCacheEntryExtractor extends AbstractEntryExtractor {
             // If any associated build result used Gradle < 8.6, then mark it as not cacheable
             if (
                 pathResults.find(result => {
-                    const gradleVersion = semver.coerce(result.gradleVersion)
-                    return gradleVersion && semver.lt(gradleVersion, '8.6.0')
+                    return !versionIsAtLeast(result.gradleVersion, '8.6.0')
                 })
             ) {
                 core.info(
@@ -449,7 +445,7 @@ export class ConfigurationCacheEntryExtractor extends AbstractEntryExtractor {
     }
 
     private getConfigCacheDirectoriesWithAssociatedBuildResults(): Record<string, BuildResult[]> {
-        return loadBuildResults().reduce(
+        return loadBuildResults().results.reduce(
             (acc, buildResult) => {
                 // For each build result, find the config-cache dir
                 const configCachePath = path.resolve(buildResult.rootProjectDir, '.gradle/configuration-cache')

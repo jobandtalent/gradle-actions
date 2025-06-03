@@ -1,9 +1,9 @@
 # Deprecation upgrade guide
 
-As these actions evolve, certain inputs, behaviour and usages are deprecated for removal. 
+As these actions evolve, certain inputs, behaviour and usages are deprecated for removal.
 Deprecated functionality will be fully supported during the current major release, and will be
-removed in the next major release. 
-Users will receive a deprecation warning when they rely on deprecated functionality, 
+removed in the next major release.
+Users will receive a deprecation warning when they rely on deprecated functionality,
 prompting them to update their workflows.
 
 ## The action `gradle/gradle-build-action` has been replaced by `gradle/actions/setup-gradle`
@@ -20,15 +20,15 @@ To convert your workflows, simply replace:
 ```
 with
 ```
-    uses: gradle/actions/setup-gradle@v3
+    uses: gradle/actions/setup-gradle@v4
 ```
 
 ## The action `gradle/wrapper-validation-action` has been replaced by `gradle/actions/wrapper-validation`
 
-To facilitate ongoing development, the `wrapper-validation-action` action implementation has been merged into 
+To facilitate ongoing development, the `wrapper-validation-action` action implementation has been merged into
 the https://github.com/gradle/actions repository, and the `gradle/wrapper-validation-action` has been replaced by the `gradle/actions/wrapper-validation` action.
 
-As of `v3.x`, the `gradle/wrapper-validation-action` and `gradle/actions/wrappper-validation` actions are 
+As of `v3.x`, the `gradle/wrapper-validation-action` and `gradle/actions/wrappper-validation` actions are
 functionally identical, and are released with the same versions.
 
 In a future major version (likely `v4.x`) we will stop releasing new versions of `gradle/wrapper-validation-action`:
@@ -40,7 +40,7 @@ To convert your workflows, simply replace:
 ```
 with
 ```
-    uses: gradle/actions/wrapper-validation@v3
+    uses: gradle/actions/wrapper-validation@v4
 ```
 
 ## Using the action to execute Gradle via the `arguments` parameter is deprecated
@@ -82,7 +82,7 @@ The exact syntax depends on whether or not your project is configured with the [
 
 ```
 - name: Setup Gradle
-  uses: gradle/actions/setup-gradle@v3
+  uses: gradle/actions/setup-gradle@v4
 
 - name: Assemble the project
   run: ./gradlew assemble
@@ -99,9 +99,9 @@ The exact syntax depends on whether or not your project is configured with the [
 
 ```
 - name: Setup Gradle for a non-wrapper project
-  uses: gradle/actions/setup-gradle@v3
+  uses: gradle/actions/setup-gradle@v4
   with:
-    gradle-version: 8.7
+    gradle-version: '8.11'
 
 - name: Assemble the project
   run: gradle assemble
@@ -143,3 +143,20 @@ to this:
     build-scan-terms-of-use-agree: "yes"
 ```
 These deprecated build-scan parameters are scheduled to be removed in `setup-gradle@v4` and `dependency-submission@v4`.
+
+## The GRADLE_ENTERPRISE_ACCESS_KEY env var is deprecated
+Gradle Enterprise has been renamed to Develocity starting from Gradle plugin 3.17 and Develocity server 2024.1.
+In v4 release of the action, it will require setting the access key with the `develocity-access-key` input and Develocity 2024.1 at least to generate short-lived tokens.
+If those requirements are not met, the `GRADLE_ENTERPRISE_ACCESS_KEY` env var will be cleared out and build scan publication or other authenticated Develocity operations won't be possible.
+
+## The `gradle-home-cache-cleanup` input parameter has been replaced by `cache-cleanup`
+
+In versions of the action prior to `v4`, the boolean `gradle-home-cache-cleanup` parameter allows users to opt-in 
+to cache cleanup, removing unused files in Gradle User Home prior to saving to the cache.
+
+With `v4`, cache-cleanup is enabled by default, and controlled by the `cache-cleanup` input parameter.
+
+To remove this deprecation:
+- If you are using `gradle-home-cache-cleanup: true` in your workflow, you can remove this option as this is now enabled by default.
+- If you want cache-cleanup to run even when a Gradle build fails, then add the `cache-cleanup: always` input.
+- If cache-cleanup is causing problems with your workflow, you can disable it with `cache-cleanup: never`.

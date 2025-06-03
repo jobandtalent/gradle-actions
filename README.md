@@ -1,5 +1,7 @@
 # GitHub Actions for Gradle builds
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gradle/actions/badge)](https://scorecard.dev/viewer/?uri=github.com/gradle/actions)
+
 This repository contains a set of GitHub Actions that are useful for building Gradle projects on GitHub.
 
 ## The `setup-gradle` action
@@ -30,7 +32,7 @@ jobs:
         distribution: 'temurin'
         java-version: 17
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v4
     - name: Build with Gradle
       run: ./gradlew build
 ```
@@ -68,7 +70,7 @@ jobs:
         distribution: 'temurin'
         java-version: 17
     - name: Generate and submit dependency graph
-      uses: gradle/actions/dependency-submission@v3
+      uses: gradle/actions/dependency-submission@v4
 ```
 
 See the [full action documentation](docs/dependency-submission.md) for more advanced usage scenarios.
@@ -78,6 +80,9 @@ See the [full action documentation](docs/dependency-submission.md) for more adva
 The `wrapper-validation` action validates the checksums of _all_ [Gradle Wrapper](https://docs.gradle.org/current/userguide/gradle_wrapper.html) JAR files present in the repository and fails if any unknown Gradle Wrapper JAR files are found.
 
 The action should be run in the root of the repository, as it will recursively search for any files named `gradle-wrapper.jar`.
+
+Starting with v4 the `setup-gradle` action will [perform wrapper validation](docs/setup-gradle.md#gradle-wrapper-validation) on each execution.
+If you are using `setup-gradle` in your workflows, it is unlikely that you will need to use the `wrapper-validation` action.
 
 ### Example workflow
 
@@ -94,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gradle/actions/wrapper-validation@v3
+      - uses: gradle/actions/wrapper-validation@v4
 ```
 
 See the [full action documentation](docs/wrapper-validation.md) for more advanced usage scenarios.

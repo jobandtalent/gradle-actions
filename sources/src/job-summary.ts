@@ -1,19 +1,25 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {RequestError} from '@octokit/request-error'
 
-import {BuildResult} from './build-results'
+import {BuildResults, BuildResult} from './build-results'
 import {SummaryConfig, getActionId, getGithubToken} from './configuration'
-import {Deprecation, getDeprecations} from './deprecation-collector'
+import {Deprecation, getDeprecations, getErrors} from './deprecation-collector'
 
 export async function generateJobSummary(
-    buildResults: BuildResult[],
+    buildResults: BuildResults,
     cachingReport: string,
     config: SummaryConfig
 ): Promise<void> {
-    const summaryTable = renderSummaryTable(buildResults)
+    const errors = renderErrors()
+    if (errors) {
+        core.summary.addRaw(errors)
+        await core.summary.write()
+        return
+    }
 
-    const hasFailure = buildResults.some(result => result.buildFailed)
+    const summaryTable = renderSummaryTable(buildResults.results)
+
+    const hasFailure = buildResults.anyFailed()
     if (config.shouldGenerateJobSummary(hasFailure)) {
         core.info('Generating Job Summary')
 
@@ -36,7 +42,7 @@ export async function generateJobSummary(
 async function addPRComment(jobSummary: string): Promise<void> {
     const context = github.context
     if (context.payload.pull_request == null) {
-        core.info('No pull_request trigger: not adding PR comment')
+        core.info('No pull_request trigger detected: not adding PR comment')
         return
     }
 
@@ -59,7 +65,7 @@ ${jobSummary}`
             body: prComment
         })
     } catch (error) {
-        if (error instanceof RequestError) {
+        if (error instanceof Error && error.name === 'HttpError') {
             core.warning(buildWarningMessage(error))
         } else {
             throw error
@@ -67,7 +73,7 @@ ${jobSummary}`
     }
 }
 
-function buildWarningMessage(error: RequestError): string {
+function buildWarningMessage(error: Error): string {
     const mainWarning = `Failed to generate PR comment.\n${String(error)}`
     if (error.message === 'Resource not accessible by integration') {
         return `${mainWarning}
@@ -80,6 +86,14 @@ Note that this permission is never available for a workflow triggered from a rep
 
 export function renderSummaryTable(results: BuildResult[]): string {
     return `${renderDeprecations()}\n${renderBuildResults(results)}`
+}
+
+function renderErrors(): string | undefined {
+    const errors = getErrors()
+    if (errors.length === 0) {
+        return undefined
+    }
+    return errors.map(error => `<b>:x: ${error}</b>`).join('\n')
 }
 
 function renderDeprecations(): string {

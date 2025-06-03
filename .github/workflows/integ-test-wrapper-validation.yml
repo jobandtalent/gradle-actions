@@ -5,7 +5,7 @@ on:
     inputs:
       runner-os:
         type: string
-        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+        default: '["ubuntu-latest"]'
       skip-dist:
         type: boolean
         default: false
@@ -13,8 +13,11 @@ on:
 env:
   SKIP_DIST: ${{ inputs.skip-dist }}
 
+permissions:
+  contents: read
+
 jobs:
-  test-setup-gradle-validation:
+  wrapper-validation-setup-gradle:
     strategy:
       fail-fast: false
       matrix:
@@ -22,29 +25,30 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
     - name: Run wrapper-validation-action
       id: setup-gradle
       uses: ./setup-gradle
-      with:
-        validate-wrappers: true
+      env:
+        ALLOWED_GRADLE_WRAPPER_CHECKSUMS: ''
       continue-on-error: true
 
     - name: Check failure
+      shell: bash
       run: |
         if [ "${{ steps.setup-gradle.outcome}}" != "failure" ] ; then
           echo "Expected validation to fail, but it didn't"
           exit 1
         fi
 
-  test-validation-success:
+  wrapper-validation-success:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -54,6 +58,7 @@ jobs:
       with:
         # to allow the invalid wrapper jar present in test data
         allow-checksums: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        min-wrapper-count: 10
 
     - name: Check outcome
       env:
@@ -61,17 +66,18 @@ jobs:
         # below to not accidentally inject code into shell script or break its syntax
         FAILED_WRAPPERS: ${{ steps.action-test.outputs.failed-wrapper }}
         FAILED_WRAPPERS_MATCHES: ${{ steps.action-test.outputs.failed-wrapper == '' }}
+      shell: bash
       run: |
         if [ "$FAILED_WRAPPERS_MATCHES" != "true" ] ; then
           echo "'outputs.failed-wrapper' has unexpected content: $FAILED_WRAPPERS"
           exit 1
         fi
 
-  test-validation-error:
+  wrapper-validation-error:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -88,6 +94,7 @@ jobs:
         VALIDATION_FAILED: ${{ steps.action-test.outcome == 'failure' }}
         FAILED_WRAPPERS: ${{ steps.action-test.outputs.failed-wrapper }}
         FAILED_WRAPPERS_MATCHES: ${{ steps.action-test.outputs.failed-wrapper == 'sources/test/jest/wrapper-validation/data/invalid/gradle-wrapper.jar|sources/test/jest/wrapper-validation/data/invalid/gradlе-wrapper.jar' }}
+      shell: bash
       run: |
         if [ "$VALIDATION_FAILED" != "true" ] ; then
           echo "Expected validation to fail, but it didn't"
@@ -96,5 +103,66 @@ jobs:
 
         if [ "$FAILED_WRAPPERS_MATCHES" != "true" ] ; then
           echo "'outputs.failed-wrapper' has unexpected content: $FAILED_WRAPPERS"
+          exit 1
+        fi
+
+  wrapper-validation-minimum-wrapper-count:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - name: Initialize integ-test
+      uses: ./.github/actions/init-integ-test
+
+    - name: Run wrapper-validation-action
+      id: action-test
+      uses: ./wrapper-validation
+      with:
+        # to allow the invalid wrapper jar present in test data
+        allow-checksums: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        min-wrapper-count: 11
+      # Expected to fail; validated below
+      continue-on-error: true
+
+    - name: Check outcome
+      env:
+        # Evaluate workflow expressions here as env variable values instead of inside shell script
+        # below to not accidentally inject code into shell script or break its syntax
+        VALIDATION_FAILED: ${{ steps.action-test.outcome == 'failure' }}
+      shell: bash
+      run: |
+        if [ "$VALIDATION_FAILED" != "true" ] ; then
+          echo "Expected validation to fail, but it didn't"
+          exit 1
+        fi
+
+  wrapper-validation-zero-wrappers:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 # Checkout the repository with no wrappers
+      with:
+        sparse-checkout: |
+          .github/actions
+          dist
+          wrapper-validation
+    - name: Initialize integ-test
+      uses: ./.github/actions/init-integ-test
+
+    - name: Run wrapper-validation-action
+      id: action-test
+      uses: ./wrapper-validation
+      # Expected to fail; validated below
+      continue-on-error: true
+
+    - name: Check outcome
+      env:
+        # Evaluate workflow expressions here as env variable values instead of inside shell script
+        # below to not accidentally inject code into shell script or break its syntax
+        VALIDATION_FAILED: ${{ steps.action-test.outcome == 'failure' }}
+      shell: bash
+      run: |
+        if [ "$VALIDATION_FAILED" != "true" ] ; then
+          echo "Expected validation to fail, but it didn't"
           exit 1
         fi

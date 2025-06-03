@@ -4,6 +4,12 @@ The `wrapper-validation` action validates the checksums of _all_ [Gradle Wrapper
 
 The action should be run in the root of the repository, as it will recursively search for any files named `gradle-wrapper.jar`.
 
+> [!NOTE]
+> Starting with v4 the `setup-gradle` action will automatically [perform wrapper validation](../docs/setup-gradle.md#gradle-wrapper-validation)
+> on each execution.
+> 
+> If you are using `setup-gradle` in your workflows, it is unlikely that you will need to use the `wrapper-validation` action.
+
 ### Example workflow
 
 ```yaml
@@ -19,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gradle/actions/wrapper-validation@v3
+      - uses: gradle/actions/wrapper-validation@v4
 ```
 
 See the [full action documentation](../docs/wrapper-validation.md) for more advanced usage scenarios.

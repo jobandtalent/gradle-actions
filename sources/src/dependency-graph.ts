@@ -3,7 +3,6 @@ import * as github from '@actions/github'
 import * as glob from '@actions/glob'
 import {DefaultArtifactClient} from '@actions/artifact'
 import {GitHub} from '@actions/github/lib/utils'
-import {RequestError} from '@octokit/request-error'
 import type {PullRequestEvent} from '@octokit/webhooks-types'
 
 import * as path from 'path'
@@ -31,22 +30,23 @@ export async function setup(config: DependencyGraphConfig): Promise<void> {
     core.exportVariable('GITHUB_DEPENDENCY_GRAPH_ENABLED', 'true')
     maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_CONTINUE_ON_FAILURE', config.getDependencyGraphContinueOnFailure())
     maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR', config.getJobCorrelator())
-    maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_JOB_ID', github.context.runId)
+    maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_JOB_ID', github.context.runId.toString())
     maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_REF', github.context.ref)
     maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_SHA', getShaFromContext())
     maybeExportVariable('GITHUB_DEPENDENCY_GRAPH_WORKSPACE', getWorkspaceDirectory())
     maybeExportVariable('DEPENDENCY_GRAPH_REPORT_DIR', config.getReportDirectory())
 
-    // To clear the dependency graph, we generate an empty graph by excluding all projects and configurations
-    if (option === DependencyGraphOption.Clear) {
-        core.exportVariable('DEPENDENCY_GRAPH_INCLUDE_PROJECTS', '')
-        core.exportVariable('DEPENDENCY_GRAPH_INCLUDE_CONFIGURATIONS', '')
-    }
+    maybeExportVariable('DEPENDENCY_GRAPH_EXCLUDE_PROJECTS', config.getExcludeProjects())
+    maybeExportVariable('DEPENDENCY_GRAPH_INCLUDE_PROJECTS', config.getIncludeProjects())
+    maybeExportVariable('DEPENDENCY_GRAPH_EXCLUDE_CONFIGURATIONS', config.getExcludeConfigurations())
+    maybeExportVariable('DEPENDENCY_GRAPH_INCLUDE_CONFIGURATIONS', config.getIncludeConfigurations())
 }
 
-function maybeExportVariable(variableName: string, value: unknown): void {
+function maybeExportVariable(variableName: string, value: string | boolean | undefined): void {
     if (!process.env[variableName]) {
-        core.exportVariable(variableName, value)
+        if (value !== undefined) {
+            core.exportVariable(variableName, value)
+        }
     }
 }
 
@@ -59,26 +59,111 @@ export async function complete(config: DependencyGraphConfig): Promise<void> {
             case DependencyGraphOption.DownloadAndSubmit: // Performed in setup
                 return
             case DependencyGraphOption.GenerateAndSubmit:
-            case DependencyGraphOption.Clear: // Submit the empty dependency graph
-                await submitDependencyGraphs(await findDependencyGraphFiles())
+                await findAndSubmitDependencyGraphs(config, false)
+                return
+            case DependencyGraphOption.GenerateSubmitAndUpload:
+                await findAndSubmitDependencyGraphs(config, true)
                 return
             case DependencyGraphOption.GenerateAndUpload:
-                await uploadDependencyGraphs(await findDependencyGraphFiles(), config)
+                await findAndUploadDependencyGraphs(config)
         }
     } catch (e) {
         warnOrFail(config, option, e)
     }
 }
 
-async function uploadDependencyGraphs(dependencyGraphFiles: string[], config: DependencyGraphConfig): Promise<void> {
-    if (dependencyGraphFiles.length === 0) {
-        core.info('No dependency graph files found to upload.')
+async function downloadAndSubmitDependencyGraphs(config: DependencyGraphConfig): Promise<void> {
+    if (isRunningInActEnvironment()) {
+        core.info('Dependency graph not supported in the ACT environment.')
         return
     }
 
+    try {
+        await submitDependencyGraphs(await downloadDependencyGraphs(config))
+    } catch (e) {
+        warnOrFail(config, DependencyGraphOption.DownloadAndSubmit, e)
+    }
+}
+
+async function findAndSubmitDependencyGraphs(config: DependencyGraphConfig, uploadAfterSubmit: boolean): Promise<void> {
     if (isRunningInActEnvironment()) {
-        core.info('Dependency graph upload not supported in the ACT environment.')
-        core.info(`Would upload: ${dependencyGraphFiles.join(', ')}`)
+        core.info('Dependency graph not supported in the ACT environment.')
+        return
+    }
+
+    const dependencyGraphFiles = await findDependencyGraphFiles()
+    try {
+        await submitDependencyGraphs(dependencyGraphFiles)
+    } catch (e) {
+        try {
+            await uploadDependencyGraphs(dependencyGraphFiles, config)
+        } catch (uploadError) {
+            core.info(String(uploadError))
+        }
+        throw e
+    }
+
+    if (uploadAfterSubmit) {
+        await uploadDependencyGraphs(dependencyGraphFiles, config)
+    }
+}
+
+async function findAndUploadDependencyGraphs(config: DependencyGraphConfig): Promise<void> {
+    if (isRunningInActEnvironment()) {
+        core.info('Dependency graph not supported in the ACT environment.')
+        return
+    }
+
+    await uploadDependencyGraphs(await findDependencyGraphFiles(), config)
+}
+
+async function downloadDependencyGraphs(config: DependencyGraphConfig): Promise<string[]> {
+    const findBy = github.context.payload.workflow_run
+        ? {
+              token: getGithubToken(),
+              workflowRunId: github.context.payload.workflow_run.id,
+              repositoryName: github.context.repo.repo,
+              repositoryOwner: github.context.repo.owner
+          }
+        : undefined
+
+    const artifactClient = new DefaultArtifactClient()
+
+    let dependencyGraphArtifacts = (
+        await artifactClient.listArtifacts({
+            latest: true,
+            findBy
+        })
+    ).artifacts.filter(artifact => artifact.name.startsWith(DEPENDENCY_GRAPH_PREFIX))
+
+    const artifactName = config.getDownloadArtifactName()
+    if (artifactName) {
+        core.info(`Filtering for artifacts ending with ${artifactName}`)
+        dependencyGraphArtifacts = dependencyGraphArtifacts.filter(artifact => artifact.name.includes(artifactName))
+    }
+
+    for (const artifact of dependencyGraphArtifacts) {
+        const downloadedArtifact = await artifactClient.downloadArtifact(artifact.id, {
+            findBy
+        })
+        core.info(`Downloading dependency-graph artifact ${artifact.name} to ${downloadedArtifact.downloadPath}`)
+    }
+
+    return findDependencyGraphFiles()
+}
+
+async function findDependencyGraphFiles(): Promise<string[]> {
+    const globber = await glob.create(`${getReportDirectory()}/**/*.json`)
+    const allFiles = await globber.glob()
+    const unprocessedFiles = allFiles.filter(file => !isProcessed(file))
+    unprocessedFiles.forEach(markProcessed)
+    core.info(`Found dependency graph files: ${unprocessedFiles.join(', ')}`)
+    return unprocessedFiles
+}
+
+async function uploadDependencyGraphs(dependencyGraphFiles: string[], config: DependencyGraphConfig): Promise<void> {
+    if (dependencyGraphFiles.length === 0) {
+        core.info('No dependency graph files found to upload.')
         return
     }
 
@@ -95,28 +180,9 @@ async function uploadDependencyGraphs(dependencyGraphFiles: string[], config: De
     }
 }
 
-async function downloadAndSubmitDependencyGraphs(config: DependencyGraphConfig): Promise<void> {
-    if (isRunningInActEnvironment()) {
-        core.info('Dependency graph download and submit not supported in the ACT environment.')
-        return
-    }
-
-    try {
-        await submitDependencyGraphs(await downloadDependencyGraphs())
-    } catch (e) {
-        warnOrFail(config, DependencyGraphOption.DownloadAndSubmit, e)
-    }
-}
-
 async function submitDependencyGraphs(dependencyGraphFiles: string[]): Promise<void> {
     if (dependencyGraphFiles.length === 0) {
         core.info('No dependency graph files found to submit.')
-        return
-    }
-
-    if (isRunningInActEnvironment()) {
-        core.info('Dependency graph submit not supported in the ACT environment.')
-        core.info(`Would submit: ${dependencyGraphFiles.join(', ')}`)
         return
     }
 
@@ -124,7 +190,7 @@ async function submitDependencyGraphs(dependencyGraphFiles: string[]): Promise<v
         try {
             await submitDependencyGraphFile(dependencyGraphFile)
         } catch (error) {
-            if (error instanceof RequestError) {
+            if (error instanceof Error && error.name === 'HttpError') {
                 error.message = translateErrorMessage(dependencyGraphFile, error)
             }
             throw error
@@ -132,7 +198,7 @@ async function submitDependencyGraphs(dependencyGraphFiles: string[]): Promise<v
     }
 }
 
-function translateErrorMessage(jsonFile: string, error: RequestError): string {
+function translateErrorMessage(jsonFile: string, error: Error): string {
     const relativeJsonFile = getRelativePathFromWorkspace(jsonFile)
     const mainWarning = `Dependency submission failed for ${relativeJsonFile}.\n${error.message}`
     if (error.message === 'Resource not accessible by integration') {
@@ -156,45 +222,6 @@ async function submitDependencyGraphFile(jsonFile: string): Promise<void> {
     const relativeJsonFile = getRelativePathFromWorkspace(jsonFile)
     core.notice(`Submitted ${relativeJsonFile}: ${response.data.message}`)
 }
-
-async function downloadDependencyGraphs(): Promise<string[]> {
-    const findBy = github.context.payload.workflow_run
-        ? {
-              token: getGithubToken(),
-              workflowRunId: github.context.payload.workflow_run.id,
-              repositoryName: github.context.repo.repo,
-              repositoryOwner: github.context.repo.owner
-          }
-        : undefined
-
-    const artifactClient = new DefaultArtifactClient()
-
-    const dependencyGraphArtifacts = (
-        await artifactClient.listArtifacts({
-            latest: true,
-            findBy
-        })
-    ).artifacts.filter(artifact => artifact.name.startsWith(DEPENDENCY_GRAPH_PREFIX))
-
-    for (const artifact of dependencyGraphArtifacts) {
-        const downloadedArtifact = await artifactClient.downloadArtifact(artifact.id, {
-            findBy
-        })
-        core.info(`Downloading dependency-graph artifact ${artifact.name} to ${downloadedArtifact.downloadPath}`)
-    }
-
-    return findDependencyGraphFiles()
-}
-
-async function findDependencyGraphFiles(): Promise<string[]> {
-    const globber = await glob.create(`${getReportDirectory()}/**/*.json`)
-    const allFiles = await globber.glob()
-    const unprocessedFiles = allFiles.filter(file => !isProcessed(file))
-    unprocessedFiles.forEach(markProcessed)
-    core.info(`Found dependency graph files: ${unprocessedFiles.join(', ')}`)
-    return unprocessedFiles
-}
-
 function getReportDirectory(): string {
     return process.env.DEPENDENCY_GRAPH_REPORT_DIR!
 }

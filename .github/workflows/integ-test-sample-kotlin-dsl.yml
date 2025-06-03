@@ -5,9 +5,10 @@ on:
     inputs:
       cache-key-prefix:
         type: string
+        default: '0'
       runner-os:
         type: string
-        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+        default: '["ubuntu-latest"]'
       skip-dist:
         type: boolean
         default: false
@@ -16,16 +17,20 @@ env:
   SKIP_DIST: ${{ inputs.skip-dist }}
   GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: sample-kotlin-dsl-${{ inputs.cache-key-prefix }}
 
+permissions:
+  contents: read
+
 jobs:
-  seed-build:
+  sample-kotlin-dsl-seed-build:
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -37,16 +42,17 @@ jobs:
       working-directory: .github/workflow-samples/kotlin-dsl
       run: ./gradlew build
 
-  verify-build:
-    needs: seed-build
+  sample-kotlin-dsl-verify-build:
+    needs: sample-kotlin-dsl-seed-build
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ${{fromJSON(inputs.runner-os)}}
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 

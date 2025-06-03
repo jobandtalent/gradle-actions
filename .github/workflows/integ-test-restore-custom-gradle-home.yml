@@ -5,6 +5,7 @@ on:
     inputs:
       cache-key-prefix:
         type: string
+        default: '0'
       skip-dist:
         type: boolean
         default: false
@@ -13,12 +14,15 @@ env:
   SKIP_DIST: ${{ inputs.skip-dist }}
   GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: restore-custom-gradle-home-${{ inputs.cache-key-prefix }}
 
+permissions:
+  contents: read
+
 jobs:
-  seed-build:
+  restore-custom-gradle-home-seed-build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -35,12 +39,12 @@ jobs:
       run: ./gradlew test --info
 
   # Test that the gradle-user-home cache will cache dependencies, by running build with --offline
-  dependencies-cache:
-    needs: seed-build
+  restore-custom-gradle-home-dependencies-cache:
+    needs: restore-custom-gradle-home-seed-build
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 
@@ -57,12 +61,12 @@ jobs:
       run: ./gradlew test --offline --info
 
   # Test that the gradle-user-home cache will cache and restore local build-cache
-  build-cache:
-    needs: seed-build
+  restore-custom-gradle-home-build-cache:
+    needs: restore-custom-gradle-home-seed-build
     runs-on: ubuntu-latest
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Initialize integ-test
       uses: ./.github/actions/init-integ-test
 

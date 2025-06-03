@@ -8,13 +8,15 @@ repositories {
 
 dependencies {
     api("org.apache.commons:commons-math3:3.6.1")
-    implementation("com.google.guava:guava:33.1.0-jre")
-
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    implementation("com.google.guava:guava:33.4.8-jre")
 }
 
-tasks.test {
-    useJUnitPlatform()
+testing {
+    suites { 
+       val test by getting(JvmTestSuite::class) { 
+            useJUnitJupiter() 
+        }
+    }
 }
 
 tasks.named("test").configure {

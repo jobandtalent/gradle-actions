@@ -4,10 +4,11 @@ import * as cache from '@actions/cache'
 import * as deprecator from './deprecation-collector'
 import {SUMMARY_ENV_VAR} from '@actions/core/lib/summary'
 
-import {parseArgsStringToArgv} from 'string-argv'
 import path from 'path'
 
 const ACTION_ID_VAR = 'GRADLE_ACTION_ID'
+
+export const ACTION_METADATA_DIR = '.setup-gradle'
 
 export class DependencyGraphConfig {
     getDependencyGraphOption(): DependencyGraphOption {
@@ -19,15 +20,15 @@ export class DependencyGraphConfig {
                 return DependencyGraphOption.Generate
             case 'generate-and-submit':
                 return DependencyGraphOption.GenerateAndSubmit
+            case 'generate-submit-and-upload':
+                return DependencyGraphOption.GenerateSubmitAndUpload
             case 'generate-and-upload':
                 return DependencyGraphOption.GenerateAndUpload
             case 'download-and-submit':
                 return DependencyGraphOption.DownloadAndSubmit
-            case 'clear':
-                return DependencyGraphOption.Clear
         }
         throw TypeError(
-            `The value '${val}' is not valid for 'dependency-graph'. Valid values are: [disabled, generate, generate-and-submit, generate-and-upload, download-and-submit, clear]. The default value is 'disabled'.`
+            `The value '${val}' is not valid for 'dependency-graph'. Valid values are: [disabled, generate, generate-and-submit, generate-submit-and-upload, generate-and-upload, download-and-submit].`
         )
     }
 
@@ -46,7 +47,28 @@ export class DependencyGraphConfig {
     }
 
     getReportDirectory(): string {
-        return path.resolve(getWorkspaceDirectory(), 'dependency-graph-reports')
+        const param = core.getInput('dependency-graph-report-dir')
+        return path.resolve(getWorkspaceDirectory(), param)
+    }
+
+    getDownloadArtifactName(): string | undefined {
+        return process.env['DEPENDENCY_GRAPH_DOWNLOAD_ARTIFACT_NAME']
+    }
+
+    getExcludeProjects(): string | undefined {
+        return getOptionalInput('dependency-graph-exclude-projects')
+    }
+
+    getIncludeProjects(): string | undefined {
+        return getOptionalInput('dependency-graph-include-projects')
+    }
+
+    getExcludeConfigurations(): string | undefined {
+        return getOptionalInput('dependency-graph-exclude-configurations')
+    }
+
+    getIncludeConfigurations(): string | undefined {
+        return getOptionalInput('dependency-graph-include-configurations')
     }
 
     static constructJobCorrelator(workflow: string, jobId: string, matrixJson: string): string {
@@ -76,9 +98,9 @@ export enum DependencyGraphOption {
     Disabled = 'disabled',
     Generate = 'generate',
     GenerateAndSubmit = 'generate-and-submit',
+    GenerateSubmitAndUpload = 'generate-submit-and-upload',
     GenerateAndUpload = 'generate-and-upload',
-    DownloadAndSubmit = 'download-and-submit',
-    Clear = 'clear'
+    DownloadAndSubmit = 'download-and-submit'
 }
 
 export class CacheConfig {
@@ -107,7 +129,45 @@ export class CacheConfig {
     }
 
     isCacheCleanupEnabled(): boolean {
-        return getBooleanInput('gradle-home-cache-cleanup') && !this.isCacheReadOnly()
+        if (this.isCacheReadOnly()) {
+            return false
+        }
+        const cleanupOption = this.getCacheCleanupOption()
+        return cleanupOption === CacheCleanupOption.Always || cleanupOption === CacheCleanupOption.OnSuccess
+    }
+
+    shouldPerformCacheCleanup(hasFailure: boolean): boolean {
+        const cleanupOption = this.getCacheCleanupOption()
+        if (cleanupOption === CacheCleanupOption.Always) {
+            return true
+        }
+        if (cleanupOption === CacheCleanupOption.OnSuccess) {
+            return !hasFailure
+        }
+        return false
+    }
+
+    private getCacheCleanupOption(): CacheCleanupOption {
+        const legacyVal = getOptionalBooleanInput('gradle-home-cache-cleanup')
+        if (legacyVal !== undefined) {
+            deprecator.recordDeprecation(
+                'The `gradle-home-cache-cleanup` input parameter has been replaced by `cache-cleanup`'
+            )
+            return legacyVal ? CacheCleanupOption.Always : CacheCleanupOption.Never
+        }
+
+        const val = core.getInput('cache-cleanup')
+        switch (val.toLowerCase().trim()) {
+            case 'always':
+                return CacheCleanupOption.Always
+            case 'on-success':
+                return CacheCleanupOption.OnSuccess
+            case 'never':
+                return CacheCleanupOption.Never
+        }
+        throw TypeError(
+            `The value '${val}' is not valid for cache-cleanup. Valid values are: [never, always, on-success].`
+        )
     }
 
     getCacheEncryptionKey(): string {
@@ -123,15 +183,16 @@ export class CacheConfig {
     }
 }
 
+export enum CacheCleanupOption {
+    Never = 'never',
+    OnSuccess = 'on-success',
+    Always = 'always'
+}
+
 export class SummaryConfig {
     shouldGenerateJobSummary(hasFailure: boolean): boolean {
         // Check if Job Summary is supported on this platform
         if (!process.env[SUMMARY_ENV_VAR]) {
-            return false
-        }
-
-        // Check if Job Summary is disabled using the deprecated input
-        if (!this.isJobSummaryEnabled()) {
             return false
         }
 
@@ -151,10 +212,6 @@ export class SummaryConfig {
             case JobSummaryOption.OnFailure:
                 return hasFailure
         }
-    }
-
-    private isJobSummaryEnabled(): boolean {
-        return getBooleanInput('generate-job-summary', true)
     }
 
     private getJobSummaryOption(): JobSummaryOption {
@@ -188,16 +245,72 @@ export enum JobSummaryOption {
 }
 
 export class BuildScanConfig {
+    static DevelocityAccessKeyEnvVar = 'DEVELOCITY_ACCESS_KEY'
+    static GradleEnterpriseAccessKeyEnvVar = 'GRADLE_ENTERPRISE_ACCESS_KEY'
+
     getBuildScanPublishEnabled(): boolean {
         return getBooleanInput('build-scan-publish') && this.verifyTermsOfUseAgreement()
     }
 
     getBuildScanTermsOfUseUrl(): string {
-        return this.getTermsOfUseProp('build-scan-terms-of-use-url', 'build-scan-terms-of-service-url')
+        return core.getInput('build-scan-terms-of-use-url')
     }
 
     getBuildScanTermsOfUseAgree(): string {
-        return this.getTermsOfUseProp('build-scan-terms-of-use-agree', 'build-scan-terms-of-service-agree')
+        return core.getInput('build-scan-terms-of-use-agree')
+    }
+
+    getDevelocityAccessKey(): string {
+        return (
+            core.getInput('develocity-access-key') ||
+            process.env[BuildScanConfig.DevelocityAccessKeyEnvVar] ||
+            process.env[BuildScanConfig.GradleEnterpriseAccessKeyEnvVar] ||
+            ''
+        )
+    }
+
+    getDevelocityTokenExpiry(): string {
+        return core.getInput('develocity-token-expiry')
+    }
+
+    getDevelocityInjectionEnabled(): boolean | undefined {
+        return getOptionalBooleanInput('develocity-injection-enabled')
+    }
+
+    getDevelocityUrl(): string {
+        return core.getInput('develocity-url')
+    }
+
+    getDevelocityAllowUntrustedServer(): boolean | undefined {
+        return getOptionalBooleanInput('develocity-allow-untrusted-server')
+    }
+
+    getDevelocityCaptureFileFingerprints(): boolean | undefined {
+        return getOptionalBooleanInput('develocity-capture-file-fingerprints')
+    }
+
+    getDevelocityEnforceUrl(): boolean | undefined {
+        return getOptionalBooleanInput('develocity-enforce-url')
+    }
+
+    getDevelocityPluginVersion(): string {
+        return core.getInput('develocity-plugin-version')
+    }
+
+    getDevelocityCcudPluginVersion(): string {
+        return core.getInput('develocity-ccud-plugin-version')
+    }
+
+    getGradlePluginRepositoryUrl(): string {
+        return core.getInput('gradle-plugin-repository-url')
+    }
+
+    getGradlePluginRepositoryUsername(): string {
+        return core.getInput('gradle-plugin-repository-username')
+    }
+
+    getGradlePluginRepositoryPassword(): string {
+        return core.getInput('gradle-plugin-repository-password')
     }
 
     private verifyTermsOfUseAgreement(): boolean {
@@ -212,22 +325,6 @@ export class BuildScanConfig {
             return false
         }
         return true
-    }
-
-    /**
-     * TODO @bigdaz: remove support for the deprecated input property in the next major release of the action
-     */
-    private getTermsOfUseProp(newPropName: string, oldPropName: string): string {
-        const newProp = core.getInput(newPropName)
-        if (newProp !== '') {
-            return newProp
-        }
-        const oldProp = core.getInput(oldPropName)
-        if (oldProp !== '') {
-            deprecator.recordDeprecation('The `build-scan-terms-of-service` input parameters have been renamed')
-            return oldProp
-        }
-        return core.getInput(oldPropName)
     }
 }
 
@@ -246,16 +343,6 @@ export class GradleExecutionConfig {
         return resolvedBuildRootDirectory
     }
 
-    getArguments(): string[] {
-        const input = core.getInput('arguments')
-        if (input.length !== 0) {
-            deprecator.recordDeprecation(
-                'Using the action to execute Gradle via the `arguments` parameter is deprecated'
-            )
-        }
-        return parseArgsStringToArgv(input)
-    }
-
     getDependencyResolutionTask(): string {
         return core.getInput('dependency-resolution-task') || ':ForceDependencyResolutionPlugin_resolveAllDependencies'
     }
@@ -263,10 +350,26 @@ export class GradleExecutionConfig {
     getAdditionalArguments(): string {
         return core.getInput('additional-arguments')
     }
+
+    verifyNoArguments(): void {
+        const input = core.getInput('arguments')
+        if (input.length !== 0) {
+            deprecator.failOnUseOfRemovedFeature(
+                `The 'arguments' parameter is no longer supported for ${getActionId()}`,
+                'Using the action to execute Gradle via the `arguments` parameter is deprecated'
+            )
+        }
+    }
 }
 
-export function doValidateWrappers(): boolean {
-    return getBooleanInput('validate-wrappers')
+export class WrapperValidationConfig {
+    doValidateWrappers(): boolean {
+        return getBooleanInput('validate-wrappers')
+    }
+
+    allowSnapshotWrappers(): boolean {
+        return getBooleanInput('allow-snapshot-wrappers')
+    }
 }
 
 // Internal parameters
@@ -301,6 +404,14 @@ export function parseNumericInput(paramName: string, paramValue: string, paramDe
     return numericValue
 }
 
+function getOptionalInput(paramName: string): string | undefined {
+    const paramValue = core.getInput(paramName)
+    if (paramValue.length > 0) {
+        return paramValue
+    }
+    return undefined
+}
+
 function getBooleanInput(paramName: string, paramDefault = false): boolean {
     const paramValue = core.getInput(paramName)
     switch (paramValue.toLowerCase().trim()) {
@@ -312,4 +423,12 @@ function getBooleanInput(paramName: string, paramDefault = false): boolean {
             return true
     }
     throw TypeError(`The value '${paramValue} is not valid for '${paramName}. Valid values are: [true, false]`)
+}
+
+function getOptionalBooleanInput(paramName: string): boolean | undefined {
+    const paramValue = core.getInput(paramName)
+    if (paramValue === '') {
+        return undefined
+    }
+    return getBooleanInput(paramName)
 }
