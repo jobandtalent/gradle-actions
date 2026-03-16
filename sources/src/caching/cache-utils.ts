@@ -60,7 +60,7 @@ export async function restoreCache(
         if (restoredEntry !== undefined) {
             const restoreTime = Date.now() - startTime
             listener.markRestored(restoredEntry.key, restoredEntry.size, restoreTime)
-            core.info(`Restored cache entry with key ${cacheKey} to ${cachePath.join()} in ${restoreTime}ms`)
+            core.info(`Restored cache entry with key ${restoredEntry.key} to ${cachePath.join()} in ${restoreTime}ms`)
         }
         return restoredEntry as cache.CacheEntry | undefined
     } catch (error) {
