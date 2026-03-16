@@ -1,15 +1,27 @@
 import * as core from '@actions/core'
 import * as cache from '@actions/cache'
 import * as exec from '@actions/exec'
+import * as s3Cache from '@itchyny/s3-cache-action'
 
 import * as crypto from 'crypto'
 import * as path from 'path'
 import * as fs from 'fs'
+import {S3Client, type S3ClientConfig} from '@aws-sdk/client-s3'
 
 import {CacheEntryListener} from './cache-reporting'
 
 const SEGMENT_DOWNLOAD_TIMEOUT_VAR = 'SEGMENT_DOWNLOAD_TIMEOUT_MINS'
 const SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT = 10 * 60 * 1000 // 10 minutes
+
+type CacheBackendEntry = {
+    key: string
+    size?: number
+}
+
+type S3CacheBackend = {
+    bucketName: string
+    client: S3Client
+}
 
 export function isCacheDebuggingEnabled(): boolean {
     if (core.isDebug()) {
@@ -43,13 +55,13 @@ export async function restoreCache(
         const cacheRestoreOptions = process.env[SEGMENT_DOWNLOAD_TIMEOUT_VAR]
             ? {}
             : {segmentTimeoutInMs: SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT}
-        const restoredEntry = await cache.restoreCache(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
+        const restoredEntry = await restoreWithSelectedBackend(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
         if (restoredEntry !== undefined) {
             const restoreTime = Date.now() - startTime
             listener.markRestored(restoredEntry.key, restoredEntry.size, restoreTime)
             core.info(`Restored cache entry with key ${cacheKey} to ${cachePath.join()} in ${restoreTime}ms`)
         }
-        return restoredEntry
+        return restoredEntry as cache.CacheEntry | undefined
     } catch (error) {
         listener.markNotRestored((error as Error).message)
         handleCacheFailure(error, `Failed to restore ${cacheKey}`)
@@ -60,7 +72,12 @@ export async function restoreCache(
 export async function saveCache(cachePath: string[], cacheKey: string, listener: CacheEntryListener): Promise<void> {
     try {
         const startTime = Date.now()
-        const savedEntry = await cache.saveCache(cachePath, cacheKey)
+        const savedEntry = await saveWithSelectedBackend(cachePath, cacheKey)
+        if (!savedEntry) {
+            listener.markAlreadyExists(cacheKey)
+            core.info(`Skipped saving cache entry with key ${cacheKey} because it already exists`)
+            return
+        }
         const saveTime = Date.now() - startTime
         listener.markSaved(savedEntry.key, savedEntry.size, saveTime)
         core.info(`Saved cache entry with key ${cacheKey} from ${cachePath.join()} in ${saveTime}ms`)
@@ -137,4 +154,73 @@ async function delay(ms: number): Promise<void> {
 async function getJavaProcesses(): Promise<string> {
     const jpsOutput = await exec.getExecOutput('jps', ['-lm'])
     return jpsOutput.stdout
+}
+
+async function restoreWithSelectedBackend(
+    cachePath: string[],
+    cacheKey: string,
+    cacheRestoreKeys: string[],
+    cacheRestoreOptions: {segmentTimeoutInMs?: number}
+): Promise<CacheBackendEntry | undefined> {
+    const s3Backend = getInputS3CacheBackend()
+    if (!s3Backend) {
+        return await cache.restoreCache(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
+    }
+
+    const restoredKey = await s3Cache.restoreCache(
+        cachePath.slice(),
+        cacheKey,
+        cacheRestoreKeys,
+        s3Backend.bucketName,
+        s3Backend.client
+    )
+
+    return restoredKey ? {key: restoredKey} : undefined
+}
+
+async function saveWithSelectedBackend(cachePath: string[], cacheKey: string): Promise<CacheBackendEntry | undefined> {
+    const s3Backend = getInputS3CacheBackend()
+    if (!s3Backend) {
+        return await cache.saveCache(cachePath, cacheKey)
+    }
+
+    const saved = await s3Cache.saveCache(cachePath.slice(), cacheKey, s3Backend.bucketName, s3Backend.client)
+    return saved ? {key: cacheKey} : undefined
+}
+
+function getInputS3CacheBackend(): S3CacheBackend | undefined {
+    const bucketName = getInputS3BucketName()
+    if (!bucketName) {
+        return undefined
+    }
+
+    return {
+        bucketName,
+        client: new S3Client(getInputS3ClientConfig())
+    }
+}
+
+export function getInputS3BucketName(): string | undefined {
+    const bucketName = core.getInput('aws-s3-bucket')
+    return bucketName || undefined
+}
+
+export function getInputS3ClientConfig(): S3ClientConfig {
+    const config: S3ClientConfig = {
+        region: core.getInput('aws-region') || process.env['AWS_REGION'] || undefined
+    }
+
+    const accessKeyId = core.getInput('aws-access-key-id') || process.env['AWS_ACCESS_KEY_ID']
+    const secretAccessKey = core.getInput('aws-secret-access-key') || process.env['AWS_SECRET_ACCESS_KEY']
+    const sessionToken = core.getInput('aws-session-token') || process.env['AWS_SESSION_TOKEN']
+
+    if (accessKeyId && secretAccessKey) {
+        config.credentials = {
+            accessKeyId,
+            secretAccessKey,
+            sessionToken: sessionToken || undefined
+        }
+    }
+
+    return config
 }

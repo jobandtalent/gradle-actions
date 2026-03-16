@@ -1,5 +1,5 @@
-name: 'Setup Gradle'
-description: 'Configures Gradle for GitHub actions, caching state and generating a dependency graph via Dependency Submission.'
+name: 'Setup Gradle S3'
+description: 'Configures Gradle for GitHub actions, caching state with optional S3 storage and generating a dependency graph via Dependency Submission.'
 
 inputs:
   gradle-version:
@@ -228,6 +228,23 @@ inputs:
   github-token:
     description: The GitHub token used to authenticate when submitting via the Dependency Submission API.
     default: ${{ github.token }}
+    required: false
+
+  # AWS inputs
+  aws-s3-bucket:
+    description: An AWS S3 bucket to use for cache storage. When not provided, the default GitHub Actions cache backend is used.
+    required: false
+  aws-access-key-id:
+    description: An AWS access key id to access the bucket. Falls back to AWS_ACCESS_KEY_ID when omitted.
+    required: false
+  aws-secret-access-key:
+    description: An AWS secret access key to access the bucket. Falls back to AWS_SECRET_ACCESS_KEY when omitted.
+    required: false
+  aws-session-token:
+    description: An AWS session token to access the bucket. Falls back to AWS_SESSION_TOKEN when omitted.
+    required: false
+  aws-region:
+    description: An AWS region where the bucket is located. Falls back to AWS_REGION when omitted.
     required: false
 
 outputs:

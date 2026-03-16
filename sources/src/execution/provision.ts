@@ -5,10 +5,12 @@ import * as httpm from '@actions/http-client'
 import * as core from '@actions/core'
 import * as cache from '@actions/cache'
 import * as toolCache from '@actions/tool-cache'
+import * as s3Cache from '@itchyny/s3-cache-action'
+import {S3Client} from '@aws-sdk/client-s3'
 
 import {determineGradleVersion, findGradleExecutableOnPath, versionIsAtLeast} from './gradle'
 import * as gradlew from './gradlew'
-import {handleCacheFailure} from '../caching/cache-utils'
+import {getInputS3BucketName, getInputS3ClientConfig, handleCacheFailure} from '../caching/cache-utils'
 import {CacheConfig} from '../configuration'
 
 const gradleVersionsBaseUrl = 'https://services.gradle.org/versions'
@@ -168,7 +170,7 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     const cacheKey = `gradle-${versionInfo.version}`
     try {
-        const restoreKey = await cache.restoreCache([downloadPath], cacheKey)
+        const restoreKey = await restoreProvisionedGradleFromCache(downloadPath, cacheKey)
         if (restoreKey) {
             core.info(`Restored Gradle distribution ${cacheKey} from cache to ${downloadPath}`)
             return downloadPath
@@ -182,7 +184,7 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     if (!cacheConfig.isCacheReadOnly()) {
         try {
-            await cache.saveCache([downloadPath], cacheKey)
+            await saveProvisionedGradleToCache(downloadPath, cacheKey)
         } catch (error) {
             handleCacheFailure(error, `Save Gradle distribution ${versionInfo.version} failed`)
         }
@@ -221,4 +223,24 @@ async function httpGetString(url: string): Promise<string> {
 interface GradleVersionInfo {
     version: string
     downloadUrl: string
+}
+
+async function restoreProvisionedGradleFromCache(downloadPath: string, cacheKey: string): Promise<string | undefined> {
+    const bucketName = getInputS3BucketName()
+    if (!bucketName) {
+        const restoredEntry = await cache.restoreCache([downloadPath], cacheKey)
+        return restoredEntry?.key
+    }
+
+    return await s3Cache.restoreCache([downloadPath], cacheKey, [], bucketName, new S3Client(getInputS3ClientConfig()))
+}
+
+async function saveProvisionedGradleToCache(downloadPath: string, cacheKey: string): Promise<void> {
+    const bucketName = getInputS3BucketName()
+    if (!bucketName) {
+        await cache.saveCache([downloadPath], cacheKey)
+        return
+    }
+
+    await s3Cache.saveCache([downloadPath], cacheKey, bucketName, new S3Client(getInputS3ClientConfig()))
 }

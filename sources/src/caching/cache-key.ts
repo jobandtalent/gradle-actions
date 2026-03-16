@@ -43,9 +43,7 @@ export class CacheKey {
  * - Any previous key for this cache on the current OS
  */
 export function generateCacheKey(cacheName: string, config: CacheConfig): CacheKey {
-    const prefix = process.env[CACHE_KEY_PREFIX_VAR] || ''
-
-    const cacheKeyBase = `${prefix}${getCacheKeyBase(cacheName, CACHE_PROTOCOL_VERSION)}`
+    const cacheKeyBase = `${getCacheKeyBase(cacheName, CACHE_PROTOCOL_VERSION)}`
 
     // At the most general level, share caches for all executions on the same OS
     const cacheKeyForEnvironment = `${cacheKeyBase}|${getCacheKeyEnvironment()}`
@@ -67,8 +65,9 @@ export function generateCacheKey(cacheName: string, config: CacheConfig): CacheK
 }
 
 export function getCacheKeyBase(cacheName: string, cacheProtocolVersion: string): string {
+    const prefix = process.env[CACHE_KEY_PREFIX_VAR] || ''
     // Prefix can be used to force change all cache keys (defaults to cache protocol version)
-    return `gradle-${cacheName}-${cacheProtocolVersion}`
+    return `${prefix}gradle-${cacheName}-${cacheProtocolVersion}`
 }
 
 function getCacheKeyEnvironment(): string {
