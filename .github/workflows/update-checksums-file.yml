@@ -45,6 +45,7 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
           git_config_global: true
+        if: false
 
       # If there are no changes, this action will not create a pull request
       - name: Create or update pull request

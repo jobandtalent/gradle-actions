@@ -7,10 +7,12 @@ import {BasicCacheService} from './cache-service-basic'
 import {BuildResult} from './build-results'
 import {CacheOptions, CacheReport, CacheService} from './cache-service'
 import {ProviderNote} from './caching-report'
+import {getInputS3BucketName} from './cache-backend'
 
 const ENHANCED_CACHE_MESSAGE = `Enhanced Caching: This build is using the proprietary 'gradle-actions-caching' provider for optimized caching support. See https://github.com/gradle/actions/blob/main/DISTRIBUTION.md for terms of use and opt-out instructions.`
 
 const BASIC_CACHE_MESSAGE = `Basic Caching: This build uses the basic open-source caching provider. For faster builds and advanced features, consider switching to the Enhanced Caching provider. See https://github.com/gradle/actions/blob/main/DISTRIBUTION.md for details.`
+const S3_CACHE_MESSAGE = `S3 Caching: This build uses the basic caching implementation with the configured S3 backend.`
 
 class NoOpCacheService implements CacheService {
     async restore(_gradleUserHome: string, _cacheOptions: CacheOptions): Promise<void> {
@@ -32,6 +34,13 @@ export async function getCacheService(cacheConfig: CacheConfig): Promise<CacheSe
         return new NoOpCacheService()
     }
 
+    // The vendored enhanced provider owns its storage implementation. When an S3 bucket is
+    // configured, use the open-source service so the fork's selected backend is honored.
+    if (getInputS3BucketName()) {
+        logCacheMessage(S3_CACHE_MESSAGE)
+        return new BasicCacheService()
+    }
+
     if (cacheConfig.getCacheProvider() === CacheProvider.Basic) {
         logCacheMessage(BASIC_CACHE_MESSAGE)
         return new BasicCacheService()
@@ -49,7 +58,9 @@ export function getProviderNote(cacheConfig: CacheConfig): ProviderNote | undefi
     if (cacheConfig.isCacheDisabled()) {
         return undefined
     }
-    return cacheConfig.getCacheProvider() === CacheProvider.Basic ? {kind: 'basic'} : {kind: 'enhanced'}
+    return getInputS3BucketName() || cacheConfig.getCacheProvider() === CacheProvider.Basic
+        ? {kind: 'basic'}
+        : {kind: 'enhanced'}
 }
 
 export async function loadVendoredCacheService(): Promise<CacheService> {

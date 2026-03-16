@@ -1,16 +1,23 @@
-import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import * as glob from '@actions/glob'
 import * as path from 'path'
 
 import {BuildResult} from './build-results'
 import {CacheEntryReport, CacheOptions, CacheReport, CacheService} from './cache-service'
+import {CacheKey, generateCacheKey} from './cache-key'
+import {
+    getInputS3BucketName,
+    logCacheOperation,
+    restoreCache,
+    saveCache
+} from './cache-backend'
 
 const ENTRY_NAME = 'Gradle User Home'
 
 const PRIMARY_KEY_STATE = 'BASIC_CACHE_PRIMARY_KEY'
 const RESTORED_KEY_STATE = 'BASIC_CACHE_RESTORED_KEY'
 const CACHE_KEY_PREFIX = 'setup-java'
+const CACHE_KEY_PREFIX_VAR = 'GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX'
 
 const GRADLE_BUILD_FILE_PATTERNS = [
     '**/*.gradle*',
@@ -22,15 +29,17 @@ const GRADLE_BUILD_FILE_PATTERNS = [
 ]
 
 export class BasicCacheService implements CacheService {
-    async restore(gradleUserHome: string, _cacheOptions: CacheOptions): Promise<void> {
+    async restore(gradleUserHome: string, cacheOptions: CacheOptions): Promise<void> {
         const cachePaths = getCachePaths(gradleUserHome)
-        const primaryKey = await computeCacheKey()
+        const cacheKey = await computeCacheKey(cacheOptions)
+        const primaryKey = cacheKey.key
         core.saveState(PRIMARY_KEY_STATE, primaryKey)
 
-        // No "restoreKeys" is set, to start with a clear cache after dependency update
-        // See https://github.com/actions/setup-java/issues/269
+    // The basic GitHub backend uses no restore keys to start with a clear cache after dependency
+    // updates. The S3 backend keeps the fork's legacy restore-key behavior for compatibility.
         try {
-            const restoredKey = await cache.restoreCache(cachePaths, primaryKey)
+            logCacheOperation('restore', cachePaths, primaryKey, cacheKey.restoreKeys)
+            const restoredKey = await restoreCache(cachePaths, primaryKey, cacheKey.restoreKeys)
             if (restoredKey) {
                 core.saveState(RESTORED_KEY_STATE, restoredKey)
                 core.info(`Basic caching restored from cache key: ${restoredKey}`)
@@ -80,10 +89,11 @@ export class BasicCacheService implements CacheService {
         const cachePaths = getCachePaths(gradleUserHome)
 
         try {
+            logCacheOperation('save', cachePaths, primaryKey)
             // A cacheId of -1 means the save failed: `saveCache` reports the underlying cause and returns
             // normally, rather than throwing. Warn and continue: caching failures should not fail the build.
-            const cacheId = await cache.saveCache(cachePaths, primaryKey)
-            if (cacheId === -1) {
+            const cacheId = await saveCache(cachePaths, primaryKey)
+            if (cacheId === -1 || cacheId === false) {
                 core.warning(
                     `Basic caching failed to save entry with key \`${primaryKey}\`. See preceding log output for the cause.`
                 )
@@ -157,12 +167,17 @@ function getCachePaths(gradleUserHome: string): string[] {
     return [path.join(gradleUserHome, 'caches'), path.join(gradleUserHome, 'wrapper')]
 }
 
-async function computeCacheKey(): Promise<string> {
+async function computeCacheKey(cacheOptions: CacheOptions): Promise<CacheKey> {
+    if (getInputS3BucketName()) {
+        return generateCacheKey('home', {isCacheStrictMatch: () => cacheOptions.strictMatch})
+    }
+
     const fileHash = await glob.hashFiles(GRADLE_BUILD_FILE_PATTERNS.join('\n'))
     if (!fileHash) {
         throw new Error(
             `No file in ${process.cwd()} matched to [${GRADLE_BUILD_FILE_PATTERNS}], make sure you have checked out the target repository`
         )
     }
-    return `${CACHE_KEY_PREFIX}-${process.env['RUNNER_OS']}-${process.arch}-gradle-${fileHash}`
+    const prefix = process.env[CACHE_KEY_PREFIX_VAR] || ''
+    return new CacheKey(`${prefix}${CACHE_KEY_PREFIX}-${process.env['RUNNER_OS']}-${process.arch}-gradle-${fileHash}`, [])
 }

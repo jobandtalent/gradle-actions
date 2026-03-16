@@ -13,11 +13,13 @@ const mockInfo = jest.fn<(message: string) => void>()
 const mockWarning = jest.fn<(message: string) => void>()
 const mockSaveState = jest.fn<(name: string, value: string) => void>()
 const mockGetState = jest.fn<(name: string) => string>()
+const mockGetInput = jest.fn<(name: string) => string>()
 jest.unstable_mockModule('@actions/core', () => ({
     info: mockInfo,
     warning: mockWarning,
     saveState: mockSaveState,
-    getState: mockGetState
+    getState: mockGetState,
+    getInput: mockGetInput
 }))
 
 // Mock @actions/glob
@@ -39,6 +41,7 @@ describe('BasicCacheService', () => {
         service = new BasicCacheService()
         process.env['RUNNER_OS'] = 'Linux'
         mockHashFiles.mockResolvedValue(HASH)
+        mockGetInput.mockReturnValue('')
     })
 
     describe('restore', () => {

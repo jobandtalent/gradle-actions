@@ -3,11 +3,11 @@ import * as os from 'os'
 import * as path from 'path'
 import * as httpm from '@actions/http-client'
 import * as core from '@actions/core'
-import * as cache from '@actions/cache'
 import * as toolCache from '@actions/tool-cache'
 
 import {determineGradleVersion, findGradleExecutableOnPath} from './gradle'
 import * as gradlew from './gradlew'
+import {describeCacheBackend, handleCacheFailure, restoreCache, saveCache} from '../cache-backend'
 import {CacheConfig} from '../configuration'
 
 const gradleVersionsBaseUrl = 'https://services.gradle.org/versions'
@@ -139,9 +139,9 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     const cacheKey = `gradle-${versionInfo.version}`
     try {
-        const restoreKey = await cache.restoreCache([downloadPath], cacheKey)
+        const restoreKey = await restoreProvisionedGradleFromCache(downloadPath, cacheKey)
         if (restoreKey) {
-            core.info(`Restored Gradle distribution ${cacheKey} from cache to ${downloadPath}`)
+            core.info(`Restored Gradle distribution ${restoreKey} from cache to ${downloadPath}`)
             return downloadPath
         }
     } catch (error) {
@@ -153,7 +153,7 @@ async function downloadAndCacheGradleDistribution(versionInfo: GradleVersionInfo
 
     if (!cacheConfig.isCacheReadOnly()) {
         try {
-            await cache.saveCache([downloadPath], cacheKey)
+            await saveProvisionedGradleToCache(downloadPath, cacheKey)
         } catch (error) {
             handleCacheFailure(error, `Save Gradle distribution ${versionInfo.version} failed`)
         }
@@ -194,19 +194,16 @@ interface GradleVersionInfo {
     downloadUrl: string
 }
 
-function handleCacheFailure(error: unknown, message: string): void {
-    if (error instanceof cache.ValidationError) {
-        // Fail on cache validation errors
-        throw error
-    }
-    if (error instanceof cache.ReserveCacheError) {
-        // Reserve cache errors are expected if the artifact has been previously cached
-        core.info(`${message}: ${error}`)
-    } else {
-        // Warn on all other errors
-        core.warning(`${message}: ${error}`)
-        if (error instanceof Error && error.stack) {
-            core.info(error.stack)
-        }
-    }
+async function restoreProvisionedGradleFromCache(downloadPath: string, cacheKey: string): Promise<string | undefined> {
+    core.info(
+        `Restoring provisioned Gradle distribution using ${describeCacheBackend()}. key=${cacheKey}; file=${downloadPath}`
+    )
+    return await restoreCache([downloadPath], cacheKey)
+}
+
+async function saveProvisionedGradleToCache(downloadPath: string, cacheKey: string): Promise<void> {
+    core.info(
+        `Saving provisioned Gradle distribution using ${describeCacheBackend()}. key=${cacheKey}; file=${downloadPath}`
+    )
+    await saveCache([downloadPath], cacheKey)
 }
