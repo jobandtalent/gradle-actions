@@ -51,6 +51,7 @@ export async function restoreCache(
     listener.markRequested(cacheKey, cacheRestoreKeys)
     try {
         const startTime = Date.now()
+        logCacheOperation('restore', cachePath, cacheKey, cacheRestoreKeys)
         // Only override the read timeout if the SEGMENT_DOWNLOAD_TIMEOUT_MINS env var has NOT been set
         const cacheRestoreOptions = process.env[SEGMENT_DOWNLOAD_TIMEOUT_VAR]
             ? {}
@@ -72,6 +73,7 @@ export async function restoreCache(
 export async function saveCache(cachePath: string[], cacheKey: string, listener: CacheEntryListener): Promise<void> {
     try {
         const startTime = Date.now()
+        logCacheOperation('save', cachePath, cacheKey)
         const savedEntry = await saveWithSelectedBackend(cachePath, cacheKey)
         if (!savedEntry) {
             listener.markAlreadyExists(cacheKey)
@@ -156,6 +158,31 @@ async function getJavaProcesses(): Promise<string> {
     return jpsOutput.stdout
 }
 
+function logCacheOperation(action: 'restore' | 'save', cachePath: string[], cacheKey: string, cacheRestoreKeys: string[] = []): void {
+    const backendDescription = describeSelectedCacheBackend()
+    core.info(
+        `${action === 'restore' ? 'Restoring' : 'Saving'} cache using ${backendDescription}. key=${cacheKey}; paths=${formatCachePaths(cachePath)}`
+    )
+
+    if (cacheRestoreKeys.length > 0) {
+        core.info(`Restore keys for ${cacheKey}: ${cacheRestoreKeys.join(', ')}`)
+    }
+}
+
+function describeSelectedCacheBackend(): string {
+    const bucketName = getInputS3BucketName()
+    if (!bucketName) {
+        return 'GitHub Actions cache backend'
+    }
+
+    const region = getInputS3Region() ?? 'unspecified region'
+    return `S3 cache backend (bucket=${bucketName}, region=${region})`
+}
+
+function formatCachePaths(cachePath: string[]): string {
+    return cachePath.join(', ')
+}
+
 async function restoreWithSelectedBackend(
     cachePath: string[],
     cacheKey: string,
@@ -205,9 +232,13 @@ export function getInputS3BucketName(): string | undefined {
     return bucketName || undefined
 }
 
+export function getInputS3Region(): string | undefined {
+    return core.getInput('aws-region') || process.env['AWS_REGION'] || undefined
+}
+
 export function getInputS3ClientConfig(): S3ClientConfig {
     const config: S3ClientConfig = {
-        region: core.getInput('aws-region') || process.env['AWS_REGION'] || undefined
+        region: getInputS3Region()
     }
 
     const accessKeyId = core.getInput('aws-access-key-id') || process.env['AWS_ACCESS_KEY_ID']

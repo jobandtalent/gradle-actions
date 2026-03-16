@@ -10,7 +10,12 @@ import {S3Client} from '@aws-sdk/client-s3'
 
 import {determineGradleVersion, findGradleExecutableOnPath, versionIsAtLeast} from './gradle'
 import * as gradlew from './gradlew'
-import {getInputS3BucketName, getInputS3ClientConfig, handleCacheFailure} from '../caching/cache-utils'
+import {
+    getInputS3BucketName,
+    getInputS3ClientConfig,
+    getInputS3Region,
+    handleCacheFailure
+} from '../caching/cache-utils'
 import {CacheConfig} from '../configuration'
 
 const gradleVersionsBaseUrl = 'https://services.gradle.org/versions'
@@ -228,19 +233,29 @@ interface GradleVersionInfo {
 async function restoreProvisionedGradleFromCache(downloadPath: string, cacheKey: string): Promise<string | undefined> {
     const bucketName = getInputS3BucketName()
     if (!bucketName) {
+        core.info(`Restoring provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`)
         const restoredEntry = await cache.restoreCache([downloadPath], cacheKey)
         return restoredEntry?.key
     }
 
+    const region = getInputS3Region() ?? 'unspecified region'
+    core.info(
+        `Restoring provisioned Gradle distribution using S3 cache backend. bucket=${bucketName}; region=${region}; key=${cacheKey}; file=${downloadPath}`
+    )
     return await s3Cache.restoreCache([downloadPath], cacheKey, [], bucketName, new S3Client(getInputS3ClientConfig()))
 }
 
 async function saveProvisionedGradleToCache(downloadPath: string, cacheKey: string): Promise<void> {
     const bucketName = getInputS3BucketName()
     if (!bucketName) {
+        core.info(`Saving provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`)
         await cache.saveCache([downloadPath], cacheKey)
         return
     }
 
+    const region = getInputS3Region() ?? 'unspecified region'
+    core.info(
+        `Saving provisioned Gradle distribution using S3 cache backend. bucket=${bucketName}; region=${region}; key=${cacheKey}; file=${downloadPath}`
+    )
     await s3Cache.saveCache([downloadPath], cacheKey, bucketName, new S3Client(getInputS3ClientConfig()))
 }
