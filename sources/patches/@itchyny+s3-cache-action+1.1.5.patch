@@ -1,0 +1,98 @@
+diff --git a/node_modules/@itchyny/s3-cache-action/lib/cache.js b/node_modules/@itchyny/s3-cache-action/lib/cache.js
+index bb97dbf..e73ef94 100644
+--- a/node_modules/@itchyny/s3-cache-action/lib/cache.js
++++ b/node_modules/@itchyny/s3-cache-action/lib/cache.js
+@@ -22,7 +22,7 @@ async function saveCache(paths, key, bucketName, s3Client) {
+     const client = new client_1.Client(bucketName, s3Client);
+     const file = fileName(paths);
+     // If the cache already exists, do not save the cache.
+-    if (await client.headObject(key, file)) {
++    if (await client.headObject(key, undefined)) {
+         core.info(`Cache found in S3 with key ${key}, not saving cache.`);
+         return false;
+     }
+@@ -37,7 +37,7 @@ async function saveCache(paths, key, bucketName, s3Client) {
+         core.debug(`Creating archive ${archive}.`);
+         await tar.create({ file: archive, gzip: true, preservePaths: true }, expandedPaths);
+         // Save the cache to S3.
+-        await client.putObject(key, file, fs.createReadStream(archive));
++        await client.putObject(key, undefined, fs.createReadStream(archive));
+         core.info(`Cache saved to S3 with key ${key}, ${fileSize(archive)} bytes.`);
+         return true;
+     }
+@@ -69,15 +69,15 @@ async function restoreCache(paths, key, restoreKeys, bucketName, s3Client) {
+     try {
+         let restoredKey;
+         // Restore the cache from S3 with the cache key.
+-        if (await client.getObject(key, file, fs.createWriteStream(archive))) {
++        if (await client.getObject(key, undefined, fs.createWriteStream(archive))) {
+             restoredKey = key;
+         }
+         else {
+             core.info(`Cache not found in S3 with key ${key}.`);
+             // Restore the cache from S3 with the restore keys.
+             L: for (const restoreKey of restoreKeys) {
+-                for (const key of await client.listObjects(restoreKey, file)) {
+-                    if (await client.getObject(key, file, fs.createWriteStream(archive))) {
++                for (const key of await client.listObjects(restoreKey, undefined)) {
++                    if (await client.getObject(key, undefined, fs.createWriteStream(archive))) {
+                         restoredKey = key;
+                         break L;
+                     }
+@@ -119,7 +119,7 @@ async function lookupCache(paths, key, restoreKeys, bucketName, s3Client) {
+     const file = fileName(paths);
+     let foundKey;
+     // Lookup the cache from S3 with the cache key.
+-    if (await client.headObject(key, file)) {
++    if (await client.headObject(key, undefined)) {
+         core.info(`Cache found in S3 with key ${key}.`);
+         foundKey = key;
+     }
+@@ -127,8 +127,8 @@ async function lookupCache(paths, key, restoreKeys, bucketName, s3Client) {
+         core.info(`Cache not found in S3 with key ${key}.`);
+         // Lookup the cache from S3 with the restore keys.
+         L: for (const restoreKey of restoreKeys) {
+-            for (const key of await client.listObjects(restoreKey, file)) {
+-                if (await client.headObject(key, file)) {
++            for (const key of await client.listObjects(restoreKey, undefined)) {
++                if (await client.headObject(key, undefined)) {
+                     core.info(`Cache found in S3 with key ${key}, restore key ${restoreKey}.`);
+                     foundKey = key;
+                     break L;
+
+diff --git a/node_modules/@itchyny/s3-cache-action/lib/client.js b/node_modules/@itchyny/s3-cache-action/lib/client.js
+index e7003a3..683e7d5 100644
+--- a/node_modules/@itchyny/s3-cache-action/lib/client.js
++++ b/node_modules/@itchyny/s3-cache-action/lib/client.js
+@@ -14,15 +14,21 @@ class Client {
+         this.client = client;
+     }
+     static joinKey(key, file) {
++        if (!file) {
++            return key;
++        }
+         return `${key}/${file}`;
+     }
+     static matchFile(objectKey, file) {
++        if (!file) {
++            return true;
++        }
+         return objectKey.endsWith(`/${file}`);
+     }
+     static getKey(objectKey) {
+         const index = objectKey.lastIndexOf("/");
+         if (index === -1) {
+-            throw new Error(`Invalid object key: ${objectKey}`);
++            return objectKey;
+         }
+         return objectKey.substring(0, index);
+     }
+@@ -80,7 +86,7 @@ class Client {
+         }
+         return (response.Contents?.filter((object) => Client.matchFile(object.Key, file))
+             .sort((x, y) => (x.LastModified.getTime() < y.LastModified.getTime() ? 1 : -1))
+-            .map((object) => Client.getKey(object.Key)) ?? []);
++            .map((object) => file ? Client.getKey(object.Key) : object.Key) ?? []);
+     }
+     async putObject(key, file, stream) {
+         core.debug(`Putting object to S3 with key ${key}, file ${file}.`);
