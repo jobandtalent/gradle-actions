@@ -56,7 +56,12 @@ export async function restoreCache(
         const cacheRestoreOptions = process.env[SEGMENT_DOWNLOAD_TIMEOUT_VAR]
             ? {}
             : {segmentTimeoutInMs: SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT}
-        const restoredEntry = await restoreWithSelectedBackend(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
+        const restoredEntry = await restoreWithSelectedBackend(
+            cachePath,
+            cacheKey,
+            cacheRestoreKeys,
+            cacheRestoreOptions
+        )
         if (restoredEntry !== undefined) {
             const restoreTime = Date.now() - startTime
             listener.markRestored(restoredEntry.key, restoredEntry.size, restoreTime)
@@ -158,7 +163,12 @@ async function getJavaProcesses(): Promise<string> {
     return jpsOutput.stdout
 }
 
-function logCacheOperation(action: 'restore' | 'save', cachePath: string[], cacheKey: string, cacheRestoreKeys: string[] = []): void {
+function logCacheOperation(
+    action: 'restore' | 'save',
+    cachePath: string[],
+    cacheKey: string,
+    cacheRestoreKeys: string[] = []
+): void {
     const backendDescription = describeSelectedCacheBackend()
     core.info(
         `${action === 'restore' ? 'Restoring' : 'Saving'} cache using ${backendDescription}. key=${cacheKey}; paths=${formatCachePaths(cachePath)}`

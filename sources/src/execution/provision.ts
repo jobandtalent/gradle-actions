@@ -233,7 +233,9 @@ interface GradleVersionInfo {
 async function restoreProvisionedGradleFromCache(downloadPath: string, cacheKey: string): Promise<string | undefined> {
     const bucketName = getInputS3BucketName()
     if (!bucketName) {
-        core.info(`Restoring provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`)
+        core.info(
+            `Restoring provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`
+        )
         const restoredEntry = await cache.restoreCache([downloadPath], cacheKey)
         return restoredEntry?.key
     }
@@ -248,7 +250,9 @@ async function restoreProvisionedGradleFromCache(downloadPath: string, cacheKey:
 async function saveProvisionedGradleToCache(downloadPath: string, cacheKey: string): Promise<void> {
     const bucketName = getInputS3BucketName()
     if (!bucketName) {
-        core.info(`Saving provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`)
+        core.info(
+            `Saving provisioned Gradle distribution using GitHub Actions cache backend. key=${cacheKey}; file=${downloadPath}`
+        )
         await cache.saveCache([downloadPath], cacheKey)
         return
     }
