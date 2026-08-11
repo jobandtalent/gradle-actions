@@ -5,12 +5,7 @@ import * as path from 'path'
 import {BuildResult} from './build-results'
 import {CacheEntryReport, CacheOptions, CacheReport, CacheService} from './cache-service'
 import {CacheKey, generateCacheKey} from './cache-key'
-import {
-    getInputS3BucketName,
-    logCacheOperation,
-    restoreCache,
-    saveCache
-} from './cache-backend'
+import {getInputS3BucketName, logCacheOperation, restoreCache, saveCache} from './cache-backend'
 
 const ENTRY_NAME = 'Gradle User Home'
 
@@ -35,8 +30,8 @@ export class BasicCacheService implements CacheService {
         const primaryKey = cacheKey.key
         core.saveState(PRIMARY_KEY_STATE, primaryKey)
 
-    // The basic GitHub backend uses no restore keys to start with a clear cache after dependency
-    // updates. The S3 backend keeps the fork's legacy restore-key behavior for compatibility.
+        // The basic GitHub backend uses no restore keys to start with a clear cache after dependency
+        // updates. The S3 backend keeps the fork's legacy restore-key behavior for compatibility.
         try {
             logCacheOperation('restore', cachePaths, primaryKey, cacheKey.restoreKeys)
             const restoredKey = await restoreCache(cachePaths, primaryKey, cacheKey.restoreKeys)
@@ -179,5 +174,8 @@ async function computeCacheKey(cacheOptions: CacheOptions): Promise<CacheKey> {
         )
     }
     const prefix = process.env[CACHE_KEY_PREFIX_VAR] || ''
-    return new CacheKey(`${prefix}${CACHE_KEY_PREFIX}-${process.env['RUNNER_OS']}-${process.arch}-gradle-${fileHash}`, [])
+    return new CacheKey(
+        `${prefix}${CACHE_KEY_PREFIX}-${process.env['RUNNER_OS']}-${process.arch}-gradle-${fileHash}`,
+        []
+    )
 }

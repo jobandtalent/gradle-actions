@@ -24,8 +24,8 @@ type RestoreCache = (
 
 type SaveCache = (paths: string[], key: string) => Promise<number>
 
-const restoreGitHubCache = cache.restoreCache as unknown as RestoreCache
-const saveGitHubCache = cache.saveCache as unknown as SaveCache
+const restoreGitHubCache: RestoreCache = cache.restoreCache
+const saveGitHubCache: SaveCache = cache.saveCache
 
 export async function restoreCache(
     cachePath: string[],

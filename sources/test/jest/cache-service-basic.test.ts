@@ -59,10 +59,13 @@ describe('BasicCacheService', () => {
                 excludes: []
             })
 
-            // No restoreKeys parameter — exact match only (setup-java#269)
+            // No restore keys are configured — exact match only (setup-java#269).
+            // The shared backend also applies the default segment download timeout.
             expect(mockRestoreCache).toHaveBeenCalledWith(
                 ['/home/.gradle/caches', '/home/.gradle/wrapper'],
-                PRIMARY_KEY
+                PRIMARY_KEY,
+                [],
+                {segmentTimeoutInMs: 10 * 60 * 1000}
             )
             expect(mockSaveState).toHaveBeenCalledWith('BASIC_CACHE_PRIMARY_KEY', PRIMARY_KEY)
             expect(mockSaveState).toHaveBeenCalledWith('BASIC_CACHE_RESTORED_KEY', PRIMARY_KEY)

@@ -59,7 +59,6 @@ index bb97dbf..e73ef94 100644
                      core.info(`Cache found in S3 with key ${key}, restore key ${restoreKey}.`);
                      foundKey = key;
                      break L;
-
 diff --git a/node_modules/@itchyny/s3-cache-action/lib/client.js b/node_modules/@itchyny/s3-cache-action/lib/client.js
 index e7003a3..683e7d5 100644
 --- a/node_modules/@itchyny/s3-cache-action/lib/client.js

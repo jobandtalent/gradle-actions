@@ -16,10 +16,13 @@ const CACHE_KEY_JOB_EXECUTION_VAR = 'GRADLE_BUILD_ACTION_CACHE_KEY_JOB_EXECUTION
  * The cache first tries an exact match, then the supplied restore-key prefixes.
  */
 export class CacheKey {
-    constructor(
-        public readonly key: string,
-        public readonly restoreKeys: string[]
-    ) {}
+    readonly key: string
+    readonly restoreKeys: string[]
+
+    constructor(key: string, restoreKeys: string[]) {
+        this.key = key
+        this.restoreKeys = restoreKeys
+    }
 }
 
 /**
