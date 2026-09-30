@@ -5,7 +5,7 @@ import * as path from 'path'
 import {BuildResult} from './build-results'
 import {CacheEntryReport, CacheOptions, CacheReport, CacheService} from './cache-service'
 import {CacheKey, generateCacheKey} from './cache-key'
-import {getInputS3BucketName, logCacheOperation, restoreCache, saveCache} from './cache-backend'
+import {getInputS3BucketName, logCacheOperation, restoreCache, saveCache, needsNativeS3Migration} from './cache-backend'
 
 const ENTRY_NAME = 'Gradle User Home'
 
@@ -30,6 +30,11 @@ export class BasicCacheService implements CacheService {
         const primaryKey = cacheKey.key
         core.saveState(PRIMARY_KEY_STATE, primaryKey)
 
+        if (cacheOptions.writeOnly) {
+            core.info('Basic caching is write-only: skipping restore to start with fresh state.')
+            return
+        }
+
         // The basic GitHub backend uses no restore keys to start with a clear cache after dependency
         // updates. The S3 backend keeps the fork's legacy restore-key behavior for compatibility.
         try {
@@ -46,9 +51,29 @@ export class BasicCacheService implements CacheService {
         }
     }
 
-    async save(gradleUserHome: string, _buildResults: BuildResult[], cacheOptions: CacheOptions): Promise<CacheReport> {
+    async save(gradleUserHome: string, buildResults: BuildResult[], cacheOptions: CacheOptions): Promise<CacheReport> {
         const primaryKey = core.getState(PRIMARY_KEY_STATE)
         const restoredKey = core.getState(RESTORED_KEY_STATE)
+        const status = cacheOptions.writeOnly ? 'write-only' : 'enabled'
+        const restoredOutcome = cacheOptions.writeOnly
+            ? '(Entry not restored: cache is write-only)'
+            : restoredKey
+              ? '(Entry restored: exact match found)'
+              : '(Entry not restored: no match found)'
+
+        if (cacheOptions.writeOnly && buildResults.some(result => result.buildFailed)) {
+            core.info('Basic caching will not publish a write-only seed after a failed Gradle build.')
+            return {
+                status,
+                entries: [
+                    entryReport({
+                        primaryKey,
+                        restoredOutcome: '(Entry not restored: cache is write-only)',
+                        savedOutcome: '(Entry not saved: Gradle build failed)'
+                    })
+                ]
+            }
+        }
 
         if (cacheOptions.readOnly) {
             return {
@@ -57,19 +82,17 @@ export class BasicCacheService implements CacheService {
                     entryReport({
                         primaryKey,
                         restoredKey,
-                        restoredOutcome: restoredKey
-                            ? '(Entry restored: exact match found)'
-                            : '(Entry not restored: no match found)',
+                        restoredOutcome,
                         savedOutcome: '(Entry not saved: cache is read-only)'
                     })
                 ]
             }
         }
 
-        if (restoredKey === primaryKey) {
+        if (restoredKey === primaryKey && !needsNativeS3Migration(primaryKey)) {
             core.info(`Basic caching restored entry with key \`${primaryKey}\`. Save was skipped.`)
             return {
-                status: 'enabled',
+                status,
                 entries: [
                     entryReport({
                         primaryKey,
@@ -93,14 +116,12 @@ export class BasicCacheService implements CacheService {
                     `Basic caching failed to save entry with key \`${primaryKey}\`. See preceding log output for the cause.`
                 )
                 return {
-                    status: 'enabled',
+                    status,
                     entries: [
                         entryReport({
                             primaryKey,
                             restoredKey,
-                            restoredOutcome: restoredKey
-                                ? '(Entry restored: exact match found)'
-                                : '(Entry not restored: no match found)',
+                            restoredOutcome,
                             savedOutcome: '(Entry not saved: save failed)'
                         })
                     ]
@@ -109,15 +130,13 @@ export class BasicCacheService implements CacheService {
 
             core.info(`Basic caching saved entry with key: ${primaryKey}`)
             return {
-                status: 'enabled',
+                status,
                 entries: [
                     entryReport({
                         primaryKey,
                         restoredKey,
                         savedKey: primaryKey,
-                        restoredOutcome: restoredKey
-                            ? '(Entry restored: exact match found)'
-                            : '(Entry not restored: no match found)',
+                        restoredOutcome,
                         savedOutcome: '(Entry saved)'
                     })
                 ]
@@ -125,14 +144,12 @@ export class BasicCacheService implements CacheService {
         } catch (error) {
             core.warning(`Basic caching failed to save entry with key \`${primaryKey}\`: ${error}`)
             return {
-                status: 'enabled',
+                status,
                 entries: [
                     entryReport({
                         primaryKey,
                         restoredKey,
-                        restoredOutcome: restoredKey
-                            ? '(Entry restored: exact match found)'
-                            : '(Entry not restored: no match found)',
+                        restoredOutcome,
                         savedOutcome: `(Entry not saved: ${error})`
                     })
                 ]
