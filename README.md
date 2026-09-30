@@ -46,6 +46,12 @@ jobs:
 
 See the [full action documentation](docs/setup-gradle.md) for more advanced usage scenarios.
 
+## The `gradle-deps-cache` action
+
+Projects can opt into a lightweight S3 cache of downloaded Gradle dependencies and wrapper distributions on Linux x64 runners. Readers restore shared dependency archives, while one writer per project saves them from a clean Gradle home. Buckets and project prefixes are supplied by the caller; S3 lifecycle rules handle retention.
+
+To adopt it, disable caching in that project's `setup-gradle` steps and add `gradle-deps-cache` restore/save steps. Existing consumers keep their current caching behavior. See the [usage and migration guide](gradle-deps-cache/README.md).
+
 ## The `dependency-submission` action
 
 Generates and submits a dependency graph for a Gradle project, allowing GitHub to alert about reported vulnerabilities in your project dependencies.

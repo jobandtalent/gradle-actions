@@ -13,6 +13,20 @@ permissions:
   contents: read
 
 jobs:
+  gradle-deps-cache-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Install zstd
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq zstd
+    - name: Check shell syntax and test Gradle dependencies caching
+      run: |
+        bash -n gradle-deps-cache/cache.sh
+        python3 -m unittest discover -s gradle-deps-cache -p 'test_*.py' -v
+
   check-format-and-unit-test:
     runs-on: ubuntu-latest
 

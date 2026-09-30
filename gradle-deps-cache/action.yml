@@ -1,0 +1,38 @@
+name: Gradle dependencies cache
+description: Restore or save Gradle dependencies and wrapper distributions in S3 using system tar and zstd
+
+inputs:
+  mode:
+    description: 'Operation to perform: restore or save.'
+    required: true
+  aws-s3-bucket:
+    description: S3 bucket name. AWS credentials must already be configured in the environment.
+    required: true
+  aws-region:
+    description: Optional AWS region. Uses the AWS CLI environment/configuration when omitted.
+    required: false
+  key-prefix:
+    description: Project prefix. Defaults to GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX. Entries are stored under <prefix>/gradle-deps/v1/.
+    required: false
+  dependency-hash:
+    description: Optional dependency hash, such as hashFiles(...) in the caller. Defaults to hashing version catalogs, Gradle build/settings files, and wrapper properties.
+    required: false
+
+outputs:
+  cache-hit:
+    description: 'true only when the exact dependency key was successfully restored; false otherwise.'
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Gradle dependencies
+      id: cache
+      shell: bash
+      env:
+        CACHE_MODE: ${{ inputs.mode }}
+        CACHE_BUCKET: ${{ inputs.aws-s3-bucket }}
+        CACHE_REGION: ${{ inputs.aws-region }}
+        CACHE_PROJECT_PREFIX: ${{ inputs.key-prefix }}
+        CACHE_DEPENDENCY_HASH: ${{ inputs.dependency-hash || hashFiles('**/*.versions.toml', '**/settings.gradle*', '**/build.gradle*', '**/gradle-wrapper.properties') }}
+      run: bash "$GITHUB_ACTION_PATH/cache.sh"
