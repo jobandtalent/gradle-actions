@@ -8,6 +8,7 @@ const inputEnvKeys = [
     'INPUT_AWS-SECRET-ACCESS-KEY',
     'INPUT_AWS-SESSION-TOKEN',
     'INPUT_AWS-REGION',
+    'INPUT_AWS-S3-CACHE-TRANSPORT',
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'AWS_SESSION_TOKEN',
@@ -60,5 +61,31 @@ describe('cache backend configuration', () => {
             },
             region: 'us-east-1'
         })
+    })
+
+    it('uses the legacy S3 transport unless native is explicitly selected', () => {
+        expect(cacheBackend.getInputS3Transport()).toBe('legacy')
+        process.env['INPUT_AWS-S3-CACHE-TRANSPORT'] = 'native'
+        expect(cacheBackend.getInputS3Transport()).toBe('native')
+        process.env['INPUT_AWS-S3-CACHE-TRANSPORT'] = 'unknown'
+        expect(() => cacheBackend.getInputS3Transport()).toThrow('legacy or native')
+    })
+
+    it('passes the same explicit credentials and region to AWS CLI as the SDK', () => {
+        process.env['INPUT_AWS-ACCESS-KEY-ID'] = 'input-key'
+        process.env['INPUT_AWS-SECRET-ACCESS-KEY'] = 'input-secret'
+        process.env['INPUT_AWS-SESSION-TOKEN'] = 'input-token'
+        process.env['INPUT_AWS-REGION'] = 'eu-west-1'
+        process.env.AWS_ACCESS_KEY_ID = 'env-key'
+        process.env.AWS_SECRET_ACCESS_KEY = 'env-secret'
+        const before = {...process.env}
+        expect(cacheBackend.getInputS3Environment()).toMatchObject({
+            AWS_ACCESS_KEY_ID: 'input-key',
+            AWS_SECRET_ACCESS_KEY: 'input-secret',
+            AWS_SESSION_TOKEN: 'input-token',
+            AWS_REGION: 'eu-west-1',
+            AWS_DEFAULT_REGION: 'eu-west-1'
+        })
+        expect(process.env).toEqual(before)
     })
 })

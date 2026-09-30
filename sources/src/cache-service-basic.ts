@@ -5,7 +5,7 @@ import * as path from 'path'
 import {BuildResult} from './build-results'
 import {CacheEntryReport, CacheOptions, CacheReport, CacheService} from './cache-service'
 import {CacheKey, generateCacheKey} from './cache-key'
-import {getInputS3BucketName, logCacheOperation, restoreCache, saveCache} from './cache-backend'
+import {getInputS3BucketName, logCacheOperation, restoreCache, saveCache, needsNativeS3Migration} from './cache-backend'
 
 const ENTRY_NAME = 'Gradle User Home'
 
@@ -66,7 +66,7 @@ export class BasicCacheService implements CacheService {
             }
         }
 
-        if (restoredKey === primaryKey) {
+        if (restoredKey === primaryKey && !needsNativeS3Migration(primaryKey)) {
             core.info(`Basic caching restored entry with key \`${primaryKey}\`. Save was skipped.`)
             return {
                 status: 'enabled',

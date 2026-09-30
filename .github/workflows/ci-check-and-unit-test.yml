@@ -53,6 +53,14 @@ jobs:
         NODE_OPTIONS: '-r @gradle-tech/develocity-agent/preload'
         DEVELOCITY_ACCESS_KEY: '${{ secrets.DV_SOLUTIONS_ACCESS_KEY }}'
 
+    - name: Install native archive test tools
+      # Native S3 tests stub AWS but exercise the actual archive tools.
+      # Ensure zstd is available even on runner images which do not include it.
+      run: |
+        if ! command -v zstd >/dev/null; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+        fi
     - name: Run unit tests
       run: |
         npm test

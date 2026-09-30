@@ -454,6 +454,72 @@ The hash is derived from the following file patterns:
 
 Unlike the Enhanced Caching provider, Basic Caching does not use restore keys. If no exact cache key match is found, the cache starts empty. This means that when you update a dependency or change a build file, the next build will re-download all dependencies and write a fresh cache entry.
 
+### S3 storage in this fork
+
+Providing `aws-s3-bucket` selects the fork's basic S3 provider, including when
+`cache-provider: enhanced` is configured. It retains job/commit-based cache keys
+and ordered restore-key prefixes. Both S3 transports cache the full `caches`
+and `wrapper` directories; changing transport does not reduce cache scope.
+
+The default `aws-s3-cache-transport: legacy` uses the existing Node tar/gzip backend.
+Projects can opt into native archive processing and streaming transfers:
+
+```yaml
+- name: Setup Gradle
+  uses: jobandtalent/gradle-actions/setup-gradle@<tested-commit>
+  with:
+    aws-s3-bucket: ${{ secrets.AWS_S3_BUCKET_PRD }}
+    aws-s3-cache-transport: native
+    cache-read-only: true
+  env:
+    GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ vars.GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX }}
+```
+
+Native transport pipes system `tar` through `zstd -T0 -3` and AWS CLI for saves.
+Restores stream S3 data through the decoder into a temporary extraction directory,
+then move the requested paths into place after all processes succeed. Failed
+downloads or decoding leave existing local state intact. Logs show the physical
+S3 key, compressed byte count and total archive/transfer time.
+
+Native readers first look for zstd entries, then use AWS CLI, system `gzip` and
+`tar` to restore existing legacy gzip entries. This allows testing the transfer
+and extraction changes against existing full-cache data. Writable jobs migrate
+legacy restores to zstd, including exact-key matches; read-only jobs never upload.
+
+The logical keys and restore matching rules are unchanged. New objects use
+`<project-prefix>native-zstd-v1/<logical-key-without-project-prefix>` so existing
+gzip readers cannot select zstd archives. For example:
+
+```text
+workers/native-zstd-v1/gradle-home-v1|Linux-X64|<job>[<context>]-<commit>
+```
+
+Legacy entries remain available when switching back to `legacy`. S3 lifecycle
+rules handle retention; native transport does not prune entries. Readers need
+S3 list/get access and writers also need put access, as with the legacy backend.
+Explicit action credentials and region are passed to both the SDK metadata calls
+and AWS CLI transfers; otherwise the existing AWS environment is used.
+
+Linux x64 runners automatically install missing `zstd` using `sudo apt-get` and
+missing AWS CLI into temporary storage. `tar` and `gzip` must be installed.
+On other platforms, install the required tools before invoking the action.
+
+For a Workers trial, replace the standalone dependency restore step with the
+single `setup-gradle` step above, removing `cache-disabled: true`. Keep PR jobs
+read-only. In the main-branch seeding job, select the same native transport with
+`cache-read-only: false`, run `./gradlew cacheDeps`, then `./gradlew --stop`;
+`setup-gradle` saves in its normal post-action. The standalone dependency lookup
+and save steps are not used for this trial.
+
+Publish the generated action bundle before pointing Workers at a source branch.
+In this fork, `CI-update-dist` can be manually dispatched on that branch and
+commits the generated `dist` files there. Then pin Workers to the resulting commit.
+Automatic bundle publishing remains restricted to the upstream repository.
+
+Compare total PR job time as well as cache time. For a controlled archive-size
+comparison, first test restoration of the same existing legacy entry through
+native transport; freshly seeded state may contain fewer files than an older cache.
+
 ### Limitations
 
 The basic provider does not support the following Enhanced Caching features:

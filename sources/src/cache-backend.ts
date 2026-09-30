@@ -2,6 +2,7 @@ import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import * as s3Cache from '@itchyny/s3-cache-action'
 import {S3Client, type S3ClientConfig} from '@aws-sdk/client-s3'
+import {NativeS3Cache, legacyStateKey} from './cache-s3-native'
 
 const SEGMENT_DOWNLOAD_TIMEOUT_VAR = 'SEGMENT_DOWNLOAD_TIMEOUT_MINS'
 const SEGMENT_DOWNLOAD_TIMEOUT_DEFAULT = 10 * 60 * 1000
@@ -40,6 +41,10 @@ export async function restoreCache(
         return await restoreGitHubCache(cachePath, cacheKey, cacheRestoreKeys, cacheRestoreOptions)
     }
 
+    if (getInputS3Transport() === 'native') {
+        return await nativeCache(s3Backend).restore(cachePath, cacheKey, cacheRestoreKeys)
+    }
+
     const restoredKey = await s3Cache.restoreCache(
         cachePath.slice(),
         cacheKey,
@@ -56,6 +61,10 @@ export async function saveCache(cachePath: string[], cacheKey: string): Promise<
         return await saveGitHubCache(cachePath, cacheKey)
     }
 
+    if (getInputS3Transport() === 'native') {
+        return await nativeCache(s3Backend).save(cachePath, cacheKey)
+    }
+
     return await s3Cache.saveCache(cachePath.slice(), cacheKey, s3Backend.bucketName, s3Backend.client)
 }
 
@@ -66,6 +75,36 @@ export function getInputS3BucketName(): string | undefined {
 
 export function getInputS3Region(): string | undefined {
     return core.getInput('aws-region') || process.env['AWS_REGION'] || undefined
+}
+
+export function getInputS3Transport(): 'legacy' | 'native' {
+    const transport = core.getInput('aws-s3-cache-transport') || 'legacy'
+    if (transport !== 'legacy' && transport !== 'native') {
+        throw new Error('aws-s3-cache-transport must be legacy or native.')
+    }
+    return transport
+}
+
+export function needsNativeS3Migration(key: string): boolean {
+    return (
+        !!getInputS3BucketName() && getInputS3Transport() === 'native' && core.getState(legacyStateKey(key)) === 'true'
+    )
+}
+
+export function getInputS3Environment(): NodeJS.ProcessEnv {
+    const environment = {...process.env}
+    const config = getInputS3ClientConfig()
+    const region = getInputS3Region()
+    if (region) {
+        environment.AWS_REGION = region
+        environment.AWS_DEFAULT_REGION = region
+    }
+    if (typeof config.credentials === 'object') {
+        environment.AWS_ACCESS_KEY_ID = config.credentials.accessKeyId
+        environment.AWS_SECRET_ACCESS_KEY = config.credentials.secretAccessKey
+        environment.AWS_SESSION_TOKEN = config.credentials.sessionToken
+    }
+    return environment
 }
 
 export function getInputS3ClientConfig(): S3ClientConfig {
@@ -90,7 +129,7 @@ export function describeCacheBackend(): string {
         return 'GitHub Actions cache backend'
     }
 
-    return `S3 cache backend (bucket=${bucketName}, region=${getInputS3Region() ?? 'unspecified region'})`
+    return `S3 cache backend (transport=${getInputS3Transport()}, bucket=${bucketName}, region=${getInputS3Region() ?? 'unspecified region'})`
 }
 
 export function logCacheOperation(
@@ -128,4 +167,13 @@ function getInputS3CacheBackend(): S3CacheBackend | undefined {
     }
 
     return {bucketName, client: new S3Client(getInputS3ClientConfig())}
+}
+
+function nativeCache(backend: S3CacheBackend): NativeS3Cache {
+    return new NativeS3Cache(
+        backend.bucketName,
+        backend.client,
+        getInputS3Environment(),
+        process.env.GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX || ''
+    )
 }
