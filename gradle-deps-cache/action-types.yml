@@ -1,0 +1,23 @@
+# Type descriptors based on https://github.com/typesafegithub/github-actions-typing
+inputs:
+  mode:
+    type: enum
+    allowed-values:
+      - restore
+      - save
+
+  aws-s3-bucket:
+    type: string
+
+  aws-region:
+    type: string
+
+  key-prefix:
+    type: string
+
+  dependency-hash:
+    type: string
+
+outputs:
+  cache-hit:
+    type: boolean

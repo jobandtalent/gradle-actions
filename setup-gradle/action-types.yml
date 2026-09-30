@@ -170,6 +170,22 @@ inputs:
   github-token:
     type: string
 
+  # AWS configuration
+  aws-s3-bucket:
+    type: string
+
+  aws-access-key-id:
+    type: string
+
+  aws-secret-access-key:
+    type: string
+
+  aws-session-token:
+    type: string
+
+  aws-region:
+    type: string
+
 outputs:
   build-scan-url:
     type: string
