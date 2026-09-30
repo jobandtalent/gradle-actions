@@ -30,8 +30,14 @@ def option(name):
     return args[args.index(name) + 1]
 
 if args[:2] == ["s3api", "head-object"]:
+    if os.environ.get("TEST_HEAD_FAILURE"):
+        print("An error occurred (403): Forbidden", file=sys.stderr)
+        sys.exit(1)
     path = root / option("--bucket") / option("--key")
-    sys.exit(0 if path.is_file() else 1)
+    if path.is_file():
+        sys.exit(0)
+    print("An error occurred (404): Not Found", file=sys.stderr)
+    sys.exit(1)
 elif args[:2] == ["s3api", "list-objects-v2"]:
     if os.environ.get("TEST_LIST_FAILURE"):
         sys.exit(1)
@@ -93,7 +99,7 @@ class CacheTest(unittest.TestCase):
             "TEST_S3": str(self.s3),
             "TEST_AWS_LOG": str(self.log),
         }
-        for name in ("TEST_LIST_FAILURE", "TEST_UPLOAD_FAILURE", "TEST_DOWNLOAD_FAILURE"):
+        for name in ("TEST_LIST_FAILURE", "TEST_UPLOAD_FAILURE", "TEST_DOWNLOAD_FAILURE", "TEST_HEAD_FAILURE"):
             self.env.pop(name, None)
 
     def run_cache(self, mode, **overrides):
@@ -129,6 +135,9 @@ class CacheTest(unittest.TestCase):
 
     def cache_hit(self):
         return dict(line.split("=", 1) for line in self.output.read_text().splitlines())["cache-hit"]
+
+    def cache_exists(self):
+        return dict(line.split("=", 1) for line in self.output.read_text().splitlines())["cache-exists"]
 
     def save_fixture(self):
         self.seed_home()
@@ -177,6 +186,50 @@ class CacheTest(unittest.TestCase):
         self.assertEqual(self.cache_hit(), "false")
         self.assertFalse(self.home.exists())
         self.assertFalse(any(call["args"][:2] == ["s3", "cp"] for call in self.calls()))
+
+    def test_lookup_existing_entry_without_touching_gradle_home_or_archive(self):
+        self.entry().parent.mkdir(parents=True)
+        self.entry().write_bytes(b"existing entry")
+        self.seed_home()
+        result = self.run_cache("lookup")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cache_exists(), "true")
+        self.assertEqual(self.cache_hit(), "false")
+        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(self.calls()[0]["args"][:2], ["s3api", "head-object"])
+        self.assertTrue((self.home / "caches/modules-2/modules-2.lock").exists())
+        self.assertEqual(self.entry().read_bytes(), b"existing entry")
+
+    def test_lookup_does_not_require_archive_tools(self):
+        self.entry().parent.mkdir(parents=True)
+        self.entry().write_bytes(b"existing entry")
+        isolated_bin = self.root / "lookup-bin"
+        isolated_bin.mkdir()
+        for tool in ("bash", "python3", "mktemp", "rm", "date", "grep", "cat"):
+            (isolated_bin / tool).symlink_to(shutil.which(tool))
+        (isolated_bin / "aws").symlink_to(self.root / "bin/aws")
+        result = self.run_cache("lookup", PATH=str(isolated_bin))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cache_exists(), "true")
+        self.assertFalse(self.home.exists())
+
+    def test_lookup_missing_exact_key_does_not_use_fallback(self):
+        self.entry("previous-version").parent.mkdir(parents=True)
+        self.entry("previous-version").write_bytes(b"older archive")
+        result = self.run_cache("lookup")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cache_exists(), "false")
+        self.assertNotIn("::warning::", result.stderr)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertFalse(self.home.exists())
+
+    def test_lookup_failure_is_nonfatal_and_does_not_skip_warming(self):
+        result = self.run_cache("lookup", TEST_HEAD_FAILURE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cache_exists(), "false")
+        self.assertIn("::warning::", result.stderr)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertFalse(self.home.exists())
 
     def test_failed_download_preserves_existing_home_and_reports_miss(self):
         self.save_fixture()

@@ -11,8 +11,8 @@ warn() {
 }
 
 case "${CACHE_MODE:-}" in
-    restore|save) ;;
-    *) fail "mode must be restore or save" ;;
+    lookup|restore|save) ;;
+    *) fail "mode must be lookup, restore, or save" ;;
 esac
 [[ -n "${CACHE_BUCKET:-}" ]] || fail "aws-s3-bucket must be provided"
 [[ "${RUNNER_OS:-}" == Linux && "${RUNNER_ARCH:-}" == X64 ]] || fail "gradle-deps-cache currently supports Linux x64 runners"
@@ -38,7 +38,7 @@ if [[ -n "${CACHE_REGION:-}" ]]; then
     export AWS_DEFAULT_REGION="$CACHE_REGION"
 fi
 
-if ! command -v zstd >/dev/null; then
+if [[ "$CACHE_MODE" != lookup ]] && ! command -v zstd >/dev/null; then
     sudo apt-get update -qq
     sudo apt-get install -y -qq zstd
 fi
@@ -50,8 +50,23 @@ if ! command -v aws >/dev/null; then
 fi
 
 echo "cache-hit=false" >> "${GITHUB_OUTPUT:?}"
+echo "cache-exists=false" >> "$GITHUB_OUTPUT"
 echo "Gradle dependencies cache: mode=$CACHE_MODE; bucket=$CACHE_BUCKET; key=$key; home=$gradle_user_home"
 start=$(date +%s)
+
+if [[ "$CACHE_MODE" == lookup ]]; then
+    if aws s3api head-object --bucket "$CACHE_BUCKET" --key "$key" >/dev/null 2>"$work_dir/lookup-error"; then
+        echo "cache-exists=true" >> "$GITHUB_OUTPUT"
+        echo "Entry $key already exists; dependency warming can be skipped"
+    else
+        if ! grep -Eq '404|Not Found|NoSuchKey' "$work_dir/lookup-error"; then
+            warn "Could not check Gradle dependencies cache entry; treating it as missing"
+            cat "$work_dir/lookup-error" >&2
+        fi
+        echo "No confirmed entry for $key; dependency warming is needed"
+    fi
+    exit 0
+fi
 
 if [[ "$CACHE_MODE" == restore ]]; then
     exact_hit=false

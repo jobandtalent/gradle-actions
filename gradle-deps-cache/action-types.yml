@@ -3,6 +3,7 @@ inputs:
   mode:
     type: enum
     allowed-values:
+      - lookup
       - restore
       - save
 
@@ -19,5 +20,8 @@ inputs:
     type: string
 
 outputs:
+  cache-exists:
+    type: boolean
+
   cache-hit:
     type: boolean

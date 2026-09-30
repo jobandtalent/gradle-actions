@@ -3,7 +3,7 @@ description: Restore or save Gradle dependencies and wrapper distributions in S3
 
 inputs:
   mode:
-    description: 'Operation to perform: restore or save.'
+    description: 'Operation to perform: lookup, restore, or save.'
     required: true
   aws-s3-bucket:
     description: S3 bucket name. AWS credentials must already be configured in the environment.
@@ -19,6 +19,9 @@ inputs:
     required: false
 
 outputs:
+  cache-exists:
+    description: 'true when lookup confirms the exact dependency key exists in S3; false otherwise.'
+    value: ${{ steps.cache.outputs.cache-exists }}
   cache-hit:
     description: 'true only when the exact dependency key was successfully restored; false otherwise.'
     value: ${{ steps.cache.outputs.cache-hit }}
@@ -26,7 +29,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Cache Gradle dependencies
+    - name: Check or cache Gradle dependencies
       id: cache
       shell: bash
       env:
