@@ -324,6 +324,16 @@ async function runPipeline(
         await Promise.all([...completion, ...transfers])
         return bytes
     } catch (error) {
+        // tar can close its input after the end-of-archive marker, before the pipe
+        // finishes trailing padding. Accept that only for restores when all tools succeed.
+        if (input === undefined && hasCode(error, 'ERR_STREAM_PREMATURE_CLOSE')) {
+            try {
+                await Promise.all(completion)
+                return bytes
+            } catch (processError) {
+                error = processError
+            }
+        }
         for (const child of children) child.kill()
         await Promise.allSettled([...completion, ...transfers])
         throw error

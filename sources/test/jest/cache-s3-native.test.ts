@@ -206,6 +206,38 @@ if (args[2] === '-') {
         expect(await fs.readFile(path.join(destination, 'caches/file'), 'utf8')).toBe('content')
     })
 
+    it('accepts a successful extractor closing before the decoder finishes trailing archive padding', async () => {
+        await populate(home, 'cached state')
+        await cache.save(paths(home), key)
+        const tarData = execFileSync('zstd', ['-dc', objectFile(physical(key))])
+        await fs.writeFile(path.join(work, 'bin/zstd'), `#!${process.execPath}
+process.stdin.resume();
+process.stdout.on('error', () => process.exit(0));
+process.stdout.write(Buffer.from('${tarData.toString('base64')}', 'base64'));
+setTimeout(() => process.stdout.end(Buffer.alloc(512)), 300);
+`, {mode: 0o755})
+        const destination = path.join(work, 'restored home')
+        await expect(cache.restore(paths(destination), key, [])).resolves.toBe(key)
+        expect(await fs.readFile(path.join(destination, 'caches/modules-2/library.jar'), 'utf8')).toBe('cached state')
+        expect((await fs.readdir(destination)).sort()).toEqual(['caches', 'wrapper'])
+    })
+
+    it('rejects a decoder that emits a complete archive but fails after the extractor closes', async () => {
+        await populate(home, 'cached state')
+        await cache.save(paths(home), key)
+        const tarData = execFileSync('zstd', ['-dc', objectFile(physical(key))])
+        await populate(home, 'local state')
+        await fs.writeFile(path.join(work, 'bin/zstd'), `#!${process.execPath}
+process.stdin.resume();
+process.stdout.on('error', () => process.exit(42));
+process.stdout.write(Buffer.from('${tarData.toString('base64')}', 'base64'));
+setTimeout(() => process.exit(42), 300);
+`, {mode: 0o755})
+        await expect(cache.restore(paths(home), key, [])).rejects.toThrow()
+        expect(await fs.readFile(path.join(home, 'caches/modules-2/library.jar'), 'utf8')).toBe('local state')
+        expect((await fs.readdir(home)).sort()).toEqual(['caches', 'wrapper'])
+    })
+
     it('leaves local state intact when zstd extraction fails', async () => {
         await populate(home, 'local')
         await fs.writeFile(objectFile(physical(key)), 'corrupted zstd')
