@@ -317,7 +317,8 @@ async function runPipeline(
             await pipeline(child.stdout, children[i + 1].stdin)
         }
     })
-    transfers.push(pipeline(Readable.from(input ? [input] : []), children[0].stdin))
+    if (input !== undefined) transfers.push(pipeline(Readable.from([input]), children[0].stdin))
+    else children[0].stdin.end()
     children[children.length - 1].stdout.resume()
     try {
         await Promise.all([...completion, ...transfers])
