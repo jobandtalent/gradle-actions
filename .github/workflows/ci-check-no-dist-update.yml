@@ -1,6 +1,6 @@
 name: CI-check-no-dist-update
 
-# Prohibit any change to 'dist/**' on a non-release branch
+# Upstream rejects bundle changes; the fork verifies manually published bundles.
 on:
   workflow_dispatch:
   pull_request:
@@ -34,7 +34,24 @@ jobs:
           echo "$file was changed"
         done
 
-    - run: |
+    - name: Setup Node for fork bundle verification
+      if: github.repository == 'jobandtalent/gradle-actions'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: sources/package-lock.json
+
+    - name: Verify published fork bundles match source
+      if: github.repository == 'jobandtalent/gradle-actions'
+      run: |
+        npm ci --prefix sources
+        npm run compile --prefix sources
+        diff -r sources/dist dist
+
+    - name: Reject bundle updates outside the fork
+      if: github.repository != 'jobandtalent/gradle-actions'
+      run: |
         echo "The 'dist' directory is automatically updated by the release process."
         echo "It should not be updated manually in a non-release branch or a pull request."
         exit 1
