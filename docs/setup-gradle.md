@@ -526,6 +526,13 @@ contents and runner class. Native transport prefers matching zstd entries before
 trying legacy gzip entries, including restore-key fallback. It does not fall back
 to another archive when a selected download or extraction fails.
 
+In a Companies trial using the same fresh cache contents and runner class,
+[native restores](https://github.com/jobandtalent/android-companies/actions/runs/36859168096)
+took 11–19 seconds, versus 58–79 seconds with the
+[legacy backend](https://github.com/jobandtalent/android-companies/actions/runs/36862427879).
+Overall job gains varied with build time; these measurements compare the full
+transport and compression implementations, rather than transfer alone.
+
 Publish the generated action bundle before using a source branch. In this fork,
 `CI-update-dist` can be manually dispatched on that branch; it commits generated
 `dist` files there. Pin consuming projects to the resulting commit. Automatic
