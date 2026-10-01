@@ -15,9 +15,9 @@ permissions:
 
 jobs:
   update-dist:
-    # Upstream publishes automatically. This fork publishes only on manual dispatch,
-    # allowing an unmerged branch to supply a runnable bundle for CI trials.
-    if: github.repository == 'gradle/actions' || (github.repository == 'jobandtalent/gradle-actions' && github.event_name == 'workflow_dispatch')
+    # Only run for the Gradle repository; otherwise when users create pull requests from their `main` branch
+    # it would erroneously update `dist` on their branch (and the pull request)
+    if: github.repository == 'gradle/actions'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
+        token: ${{ secrets.BOT_GITHUB_TOKEN }}
 
     - name: Set up Node.js
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -61,7 +61,6 @@ jobs:
         cp -r sources/dist .
 
     - name: Import GPG key to sign commits
-      if: github.repository == 'gradle/actions'
       uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
       with:
         gpg_private_key: ${{ secrets.GH_BOT_PGP_PRIVATE_KEY }}

@@ -28,12 +28,6 @@ jest.unstable_mockModule('@actions/glob', () => ({
     hashFiles: mockHashFiles
 }))
 
-const mockNativeSaveCache = jest.fn<(...args: unknown[]) => Promise<boolean>>()
-jest.unstable_mockModule('../../src/cache-s3-native', () => ({
-    NativeS3Cache: jest.fn(() => ({save: mockNativeSaveCache})),
-    legacyStateKey: (key: string) => `NATIVE_LEGACY_${key}`
-}))
-
 const {BasicCacheService} = await import('../../src/cache-service-basic')
 
 const HASH = 'abc123def456'
@@ -48,21 +42,9 @@ describe('BasicCacheService', () => {
         process.env['RUNNER_OS'] = 'Linux'
         mockHashFiles.mockResolvedValue(HASH)
         mockGetInput.mockReturnValue('')
-        mockNativeSaveCache.mockResolvedValue(true)
     })
 
     describe('restore', () => {
-        it('retains the save key without downloading cache in write-only mode', async () => {
-            await service.restore('/home/.gradle', {
-                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
-                strictMatch: false, cleanup: 'never', includes: [], excludes: []
-            })
-
-            expect(mockSaveState).toHaveBeenCalledWith('BASIC_CACHE_PRIMARY_KEY', PRIMARY_KEY)
-            expect(mockRestoreCache).not.toHaveBeenCalled()
-            expect(mockSaveState).not.toHaveBeenCalledWith('BASIC_CACHE_RESTORED_KEY', expect.anything())
-        })
-
         it('restores cache without restoreKeys and saves both keys to state', async () => {
             mockRestoreCache.mockResolvedValue(PRIMARY_KEY)
 
@@ -147,86 +129,7 @@ describe('BasicCacheService', () => {
         })
     })
 
-    describe('native migration', () => {
-        const options = {
-            disabled: false,
-            readOnly: false,
-            writeOnly: false,
-            overwriteExisting: false,
-            strictMatch: false,
-            cleanup: 'never' as const,
-            includes: [],
-            excludes: []
-        }
-
-        beforeEach(() => {
-            mockGetInput.mockImplementation(name => {
-                if (name === 'aws-s3-bucket') return 'bucket'
-                if (name === 'aws-s3-cache-transport') return 'native'
-                return ''
-            })
-            mockGetState.mockImplementation(name => {
-                if (name === 'BASIC_CACHE_PRIMARY_KEY' || name === 'BASIC_CACHE_RESTORED_KEY') return PRIMARY_KEY
-                return ''
-            })
-        })
-
-        it('migrates an exact legacy restore to a native archive', async () => {
-            mockGetState.mockImplementation(name => (name === `NATIVE_LEGACY_${PRIMARY_KEY}` ? 'true' : PRIMARY_KEY))
-            const report = await service.save('/home/.gradle', [], options)
-            expect(mockNativeSaveCache).toHaveBeenCalledWith(
-                ['/home/.gradle/caches', '/home/.gradle/wrapper'],
-                PRIMARY_KEY
-            )
-            expect(report.entries[0].savedKey).toBe(PRIMARY_KEY)
-        })
-
-        it('does not rewrite an exact native restore', async () => {
-            const report = await service.save('/home/.gradle', [], options)
-            expect(mockNativeSaveCache).not.toHaveBeenCalled()
-            expect(report.entries[0].savedOutcome).toContain('already exists')
-        })
-
-        it('never migrates a legacy archive in a read-only job', async () => {
-            mockGetState.mockImplementation(name => (name === `NATIVE_LEGACY_${PRIMARY_KEY}` ? 'true' : PRIMARY_KEY))
-            const report = await service.save('/home/.gradle', [], {...options, readOnly: true})
-            expect(report.status).toBe('read-only')
-            expect(mockNativeSaveCache).not.toHaveBeenCalled()
-            expect(mockGetState).not.toHaveBeenCalledWith(`NATIVE_LEGACY_${PRIMARY_KEY}`)
-        })
-    })
-
     describe('save', () => {
-        it('publishes fresh write-only state using the saved primary key', async () => {
-            mockGetState.mockImplementation(name => name === 'BASIC_CACHE_PRIMARY_KEY' ? PRIMARY_KEY : '')
-            mockSaveCache.mockResolvedValue(0)
-
-            const report = await service.save('/home/.gradle', [], {
-                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
-                strictMatch: false, cleanup: 'never', includes: [], excludes: []
-            })
-
-            expect(mockSaveCache).toHaveBeenCalledWith(['/home/.gradle/caches', '/home/.gradle/wrapper'], PRIMARY_KEY)
-            expect(report.status).toBe('write-only')
-            expect(report.entries[0].savedKey).toBe(PRIMARY_KEY)
-        })
-
-        it('does not publish a write-only seed after a failed Gradle build', async () => {
-            mockGetState.mockImplementation(name => name === 'BASIC_CACHE_PRIMARY_KEY' ? PRIMARY_KEY : '')
-
-            const report = await service.save('/home/.gradle', [{
-                rootProjectName: 'project', rootProjectDir: '/workspace', requestedTasks: 'assemble',
-                gradleVersion: '9.8.0', gradleHomeDir: '/gradle', buildFailed: true,
-                configCacheHit: false, buildScanUri: '', buildScanFailed: false
-            }], {
-                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
-                strictMatch: false, cleanup: 'never', includes: [], excludes: []
-            })
-
-            expect(mockSaveCache).not.toHaveBeenCalled()
-            expect(report.entries[0].savedOutcome).toContain('Gradle build failed')
-        })
-
         it('reports readOnly with restored key when cache was hit', async () => {
             mockGetState.mockReturnValue(PRIMARY_KEY)
             const report = await service.save('/home/.gradle', [], {

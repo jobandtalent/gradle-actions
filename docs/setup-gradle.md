@@ -492,9 +492,11 @@ recorded Gradle build fails. Cache key policy remains project-owned; existing
 `GRADLE_BUILD_ACTION_CACHE_KEY_*` overrides can share a build-input fingerprint
 between seed and PR jobs instead of using commit SHA.
 
-Publish runnable bundles with the fork's manual `CI-update-dist` workflow and pin
-projects to the generated commit. Compare transports using the same cache contents
-and runner class; smaller or fresher snapshots alone can affect the results.
+Keep generated bundles out of source PRs. Publish runnable bundles with the fork's
+manual `CI-update-dist` workflow on a separate trial branch, or on `main` after
+merging, and pin projects to the generated commit. Compare transports using the
+same cache contents and runner class; smaller or fresher snapshots alone can
+affect the results.
 
 ### Limitations
 
