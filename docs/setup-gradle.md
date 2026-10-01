@@ -504,6 +504,15 @@ Linux x64 runners automatically install missing `zstd` using `sudo apt-get` and
 missing AWS CLI into temporary storage. `tar` and `gzip` must be installed.
 On other platforms, install the required tools before invoking the action.
 
+To seed fresh full state, use `cache-write-only: true` on a clean runner. This skips
+restoring an archive while retaining the key used by the post-action save. Resolve
+current dependencies and run a representative build to warm useful transforms;
+write-only seeds are not published when a recorded Gradle build fails. Keep PR
+jobs read-only. Projects can check whether the exact native S3 object key already
+exists before invoking setup and building. The normal full-cache key includes
+the commit, so this check skips repeat seeds for that commit, while new commits
+produce fresh snapshots.
+
 For a Workers trial, replace the standalone dependency restore step with the
 single `setup-gradle` step above, removing `cache-disabled: true`. Keep PR jobs
 read-only. In the main-branch seeding job, select the same native transport with

@@ -45,6 +45,17 @@ describe('BasicCacheService', () => {
     })
 
     describe('restore', () => {
+        it('retains the save key without downloading cache in write-only mode', async () => {
+            await service.restore('/home/.gradle', {
+                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
+                strictMatch: false, cleanup: 'never', includes: [], excludes: []
+            })
+
+            expect(mockSaveState).toHaveBeenCalledWith('BASIC_CACHE_PRIMARY_KEY', PRIMARY_KEY)
+            expect(mockRestoreCache).not.toHaveBeenCalled()
+            expect(mockSaveState).not.toHaveBeenCalledWith('BASIC_CACHE_RESTORED_KEY', expect.anything())
+        })
+
         it('restores cache without restoreKeys and saves both keys to state', async () => {
             mockRestoreCache.mockResolvedValue(PRIMARY_KEY)
 
@@ -130,6 +141,36 @@ describe('BasicCacheService', () => {
     })
 
     describe('save', () => {
+        it('publishes fresh write-only state using the saved primary key', async () => {
+            mockGetState.mockImplementation(name => name === 'BASIC_CACHE_PRIMARY_KEY' ? PRIMARY_KEY : '')
+            mockSaveCache.mockResolvedValue(0)
+
+            const report = await service.save('/home/.gradle', [], {
+                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
+                strictMatch: false, cleanup: 'never', includes: [], excludes: []
+            })
+
+            expect(mockSaveCache).toHaveBeenCalledWith(['/home/.gradle/caches', '/home/.gradle/wrapper'], PRIMARY_KEY)
+            expect(report.status).toBe('write-only')
+            expect(report.entries[0].savedKey).toBe(PRIMARY_KEY)
+        })
+
+        it('does not publish a write-only seed after a failed Gradle build', async () => {
+            mockGetState.mockImplementation(name => name === 'BASIC_CACHE_PRIMARY_KEY' ? PRIMARY_KEY : '')
+
+            const report = await service.save('/home/.gradle', [{
+                rootProjectName: 'project', rootProjectDir: '/workspace', requestedTasks: 'assemble',
+                gradleVersion: '9.8.0', gradleHomeDir: '/gradle', buildFailed: true,
+                configCacheHit: false, buildScanUri: '', buildScanFailed: false
+            }], {
+                disabled: false, readOnly: false, writeOnly: true, overwriteExisting: false,
+                strictMatch: false, cleanup: 'never', includes: [], excludes: []
+            })
+
+            expect(mockSaveCache).not.toHaveBeenCalled()
+            expect(report.entries[0].savedOutcome).toContain('Gradle build failed')
+        })
+
         it('reports readOnly with restored key when cache was hit', async () => {
             mockGetState.mockReturnValue(PRIMARY_KEY)
             const report = await service.save('/home/.gradle', [], {
