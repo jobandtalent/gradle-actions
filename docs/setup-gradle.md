@@ -456,13 +456,9 @@ Unlike the Enhanced Caching provider, Basic Caching does not use restore keys. I
 
 ### S3 storage in this fork
 
-Providing `aws-s3-bucket` selects the fork's basic S3 provider, including when
-`cache-provider: enhanced` is configured. It retains job/commit-based cache keys
-and ordered restore-key prefixes. Both S3 transports cache the full `caches`
-and `wrapper` directories; changing transport does not reduce cache scope.
-
-The default `aws-s3-cache-transport: legacy` uses the existing Node tar/gzip backend.
-Projects can opt into native archive processing and streaming transfers:
+`aws-s3-bucket` selects the fork's basic S3 backend, which caches the full `caches`
+and `wrapper` directories with the existing logical keys and restore prefixes.
+Legacy Node tar/gzip remains the default. Opt in per project:
 
 ```yaml
 - name: Setup Gradle
@@ -475,68 +471,30 @@ Projects can opt into native archive processing and streaming transfers:
     GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ vars.GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX }}
 ```
 
-Native transport pipes system `tar` through `zstd -T0 -3` and AWS CLI for saves.
-Restores stream S3 data through the decoder into a temporary extraction directory,
-then move the requested paths into place after all processes succeed. Failed
-downloads or decoding leave existing local state intact. Logs show the physical
-S3 key, compressed byte count and total archive/transfer time.
+Native saves stream `tar` → `zstd -T0 -3` → AWS CLI. Restores extract beside the
+Gradle cache and promote files only after all tools succeed. Failed transfers or
+decoding leave local state intact. Logs report compressed bytes and elapsed time.
 
-Native readers first look for zstd entries, then use AWS CLI, system `gzip` and
-`tar` to restore existing legacy gzip entries. This allows testing the transfer
-and extraction changes against existing full-cache data. Writable jobs migrate
-legacy restores to zstd, including exact-key matches; read-only jobs never upload.
+New objects use `<project-prefix>native-zstd-v1/<logical-key-without-prefix>`.
+Readers prefer matching native objects, then try legacy gzip archives; a failed
+selected restore does not try another archive. Writable jobs migrate legacy
+restores, including exact matches. Read-only jobs never upload. Legacy archives
+remain available when switching back; S3 lifecycle rules handle retention.
 
-Logical keys and the ordered restore-key prefixes remain unchanged. New objects use
-`<project-prefix>native-zstd-v1/<logical-key-without-project-prefix>` so existing
-gzip readers cannot select zstd archives. For example:
+Linux x64 automatically installs missing zstd and AWS CLI. Other runners must
+provide them; tar and gzip must already be installed. Action credentials/region
+or the AWS environment configure both SDK lookups and CLI transfers. Readers need
+S3 list/get permissions; writers also need put access.
 
-```text
-workers/native-zstd-v1/gradle-home-v1|Linux-X64|<job>[<context>]-<commit>
-```
+Fresh seeding uses `cache-write-only: true` after clearing local cache directories,
+then a representative Gradle build. It skips restore and avoids publishing when a
+recorded Gradle build fails. Cache key policy remains project-owned; existing
+`GRADLE_BUILD_ACTION_CACHE_KEY_*` overrides can share a build-input fingerprint
+between seed and PR jobs instead of using commit SHA.
 
-Legacy entries remain available when switching back to `legacy`. S3 lifecycle
-rules handle retention; native transport does not prune entries. Readers need
-S3 list/get access and writers also need put access, as with the legacy backend.
-Explicit action credentials and region are passed to both the SDK metadata calls
-and AWS CLI transfers; otherwise the existing AWS environment is used.
-
-Linux x64 runners automatically install missing `zstd` using `sudo apt-get` and
-missing AWS CLI into temporary storage. `tar` and `gzip` must be installed.
-On other platforms, install the required tools before invoking the action.
-
-To seed fresh full state, use `cache-write-only: true` on a clean runner. This skips
-restoring an archive while retaining the key used by the post-action save. Resolve
-current dependencies and run a representative build to warm useful transforms;
-write-only seeds are not published when a recorded Gradle build fails. Keep PR
-jobs read-only. Projects can check whether the exact native S3 object key already
-exists before invoking setup and building. The normal full-cache key includes
-the commit, so this check skips repeat seeds for that commit, while new commits
-produce fresh snapshots.
-
-Projects may override the existing `GRADLE_BUILD_ACTION_CACHE_KEY_ENVIRONMENT`,
-`GRADLE_BUILD_ACTION_CACHE_KEY_JOB`, `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE`
-and `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_EXECUTION` environment variables to share
-one snapshot across seeding and PR jobs. A build-input fingerprint in place of
-commit SHA allows reuse across code-only commits; include relevant Gradle/JDK
-inputs and isolate incompatible Gradle versions. This key policy is owned by the
-project, independently of the archive transport.
-
-Compare total PR job time as well as cache time, using the same fresh cache
-contents and runner class. Native transport prefers matching zstd entries before
-trying legacy gzip entries, including restore-key fallback. It does not fall back
-to another archive when a selected download or extraction fails.
-
-In a Companies trial using the same fresh cache contents and runner class,
-[native restores](https://github.com/jobandtalent/android-companies/actions/runs/36859168096)
-took 11–19 seconds, versus 58–79 seconds with the
-[legacy backend](https://github.com/jobandtalent/android-companies/actions/runs/36862427879).
-Overall job gains varied with build time; these measurements compare the full
-transport and compression implementations, rather than transfer alone.
-
-Publish the generated action bundle before using a source branch. In this fork,
-`CI-update-dist` can be manually dispatched on that branch; it commits generated
-`dist` files there. Pin consuming projects to the resulting commit. Automatic
-bundle publishing remains restricted to the upstream repository.
+Publish runnable bundles with the fork's manual `CI-update-dist` workflow and pin
+projects to the generated commit. Compare transports using the same cache contents
+and runner class; smaller or fresher snapshots alone can affect the results.
 
 ### Limitations
 
@@ -544,7 +502,6 @@ The basic provider does not support the following Enhanced Caching features:
 - **Cache cleanup** (`cache-cleanup`): Stale entries are not automatically removed.
 - **Deduplication**: The entire `caches` and `wrapper` directories are stored as a single cache entry, without deduplication of individual artifacts.
 - **Include/exclude paths** (`gradle-home-cache-includes` / `gradle-home-cache-excludes`): The cached paths are fixed.
-- **Write-only mode** (`cache-write-only`): Not available with basic caching.
 - **Overwrite existing** (`cache-overwrite-existing`): Not available with basic caching.
 - **Strict cache matching** (`gradle-home-cache-strict-match`): Not applicable since restore keys are not used.
 
