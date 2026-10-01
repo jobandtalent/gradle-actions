@@ -123,6 +123,29 @@ if (args[2] === '-') {
         expect((await fs.readdir(destination)).sort()).toEqual(['caches', 'wrapper'])
     })
 
+    it('copies staged state when rename crosses filesystems and removes staging', async () => {
+        await populate(home, 'cached state')
+        await cache.save(paths(home), key)
+        const destination = path.join(work, 'another home')
+        rename.mockRejectedValueOnce(Object.assign(new Error('Cross-device link'), {code: 'EXDEV'}))
+        await expect(cache.restore(paths(destination), key, [])).resolves.toBe(key)
+        expect(await fs.readFile(path.join(destination, 'caches/modules-2/library.jar'), 'utf8')).toBe('cached state')
+        expect(await fs.readFile(path.join(destination, 'wrapper/dists/gradle.zip'), 'utf8')).toBe('cached state')
+        expect((await fs.readdir(destination)).sort()).toEqual(['caches', 'wrapper'])
+    })
+
+    it('fails incomplete paginated listings without restoring or modifying local state', async () => {
+        await populate(home, 'local state')
+        send.mockRejectedValueOnce(missing()).mockResolvedValueOnce({
+            Contents: [{Key: physical(`${key}-older`), LastModified: new Date('2025-01-01')}],
+            IsTruncated: true
+        })
+        await expect(cache.restore(paths(home), key, ['workers/gradle-home-v1|Linux-X64|']))
+            .rejects.toThrow('missing its next page token')
+        expect(await fs.readFile(path.join(home, 'caches/modules-2/library.jar'), 'utf8')).toBe('local state')
+        await expect(fs.stat(environment.NATIVE_TEST_CALLS!)).rejects.toThrow()
+    })
+
     it('uses the newest entry across all pages of the first matching restore prefix', async () => {
         const older = 'workers/gradle-home-v1|Linux-X64|unit-old'
         const newer = 'workers/gradle-home-v1|Linux-X64|unit-new'

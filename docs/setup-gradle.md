@@ -486,7 +486,7 @@ Native readers first look for zstd entries, then use AWS CLI, system `gzip` and
 and extraction changes against existing full-cache data. Writable jobs migrate
 legacy restores to zstd, including exact-key matches; read-only jobs never upload.
 
-The logical keys and restore matching rules are unchanged. New objects use
+Logical keys and the ordered restore-key prefixes remain unchanged. New objects use
 `<project-prefix>native-zstd-v1/<logical-key-without-project-prefix>` so existing
 gzip readers cannot select zstd archives. For example:
 
@@ -513,21 +513,23 @@ exists before invoking setup and building. The normal full-cache key includes
 the commit, so this check skips repeat seeds for that commit, while new commits
 produce fresh snapshots.
 
-For a Workers trial, replace the standalone dependency restore step with the
-single `setup-gradle` step above, removing `cache-disabled: true`. Keep PR jobs
-read-only. In the main-branch seeding job, select the same native transport with
-`cache-read-only: false`, run `./gradlew cacheDeps`, then `./gradlew --stop`;
-`setup-gradle` saves in its normal post-action. The standalone dependency lookup
-and save steps are not used for this trial.
+Projects may override the existing `GRADLE_BUILD_ACTION_CACHE_KEY_ENVIRONMENT`,
+`GRADLE_BUILD_ACTION_CACHE_KEY_JOB`, `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE`
+and `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_EXECUTION` environment variables to share
+one snapshot across seeding and PR jobs. A build-input fingerprint in place of
+commit SHA allows reuse across code-only commits; include relevant Gradle/JDK
+inputs and isolate incompatible Gradle versions. This key policy is owned by the
+project, independently of the archive transport.
 
-Publish the generated action bundle before pointing Workers at a source branch.
-In this fork, `CI-update-dist` can be manually dispatched on that branch and
-commits the generated `dist` files there. Then pin Workers to the resulting commit.
-Automatic bundle publishing remains restricted to the upstream repository.
+Compare total PR job time as well as cache time, using the same fresh cache
+contents and runner class. Native transport prefers matching zstd entries before
+trying legacy gzip entries, including restore-key fallback. It does not fall back
+to another archive when a selected download or extraction fails.
 
-Compare total PR job time as well as cache time. For a controlled archive-size
-comparison, first test restoration of the same existing legacy entry through
-native transport; freshly seeded state may contain fewer files than an older cache.
+Publish the generated action bundle before using a source branch. In this fork,
+`CI-update-dist` can be manually dispatched on that branch; it commits generated
+`dist` files there. Pin consuming projects to the resulting commit. Automatic
+bundle publishing remains restricted to the upstream repository.
 
 ### Limitations
 
