@@ -9,6 +9,8 @@ const info = jest.fn()
 const warning = jest.fn()
 const saveState = jest.fn()
 jest.unstable_mockModule('@actions/core', () => ({info, warning, saveState}))
+const rename = jest.fn(fs.rename)
+jest.unstable_mockModule('node:fs/promises', () => ({...fs, rename}))
 const {NativeS3Cache, legacyStateKey} = await import('../../src/cache-s3-native')
 
 describe('native S3 archives', () => {
@@ -107,6 +109,20 @@ if (args[2] === '-') {
         expect(await fs.readFile(destination)).toEqual(Buffer.from([0, 255, 1, 2]))
     })
 
+    it('stages beside the target cache rather than on the runner temporary mount', async () => {
+        await populate(home, 'cached state')
+        await cache.save(paths(home), key)
+        const destination = path.join(work, 'another home')
+        await cache.restore(paths(destination), key, [])
+        expect(rename).toHaveBeenCalledTimes(2)
+        for (const [source, target] of rename.mock.calls) {
+            expect(path.dirname(path.dirname(String(source)))).toBe(destination)
+            expect(path.basename(path.dirname(String(source)))).toMatch(/^\.gradle-s3-/)
+            expect(path.dirname(String(target))).toBe(destination)
+        }
+        expect((await fs.readdir(destination)).sort()).toEqual(['caches', 'wrapper'])
+    })
+
     it('uses the newest entry across all pages of the first matching restore prefix', async () => {
         const older = 'workers/gradle-home-v1|Linux-X64|unit-old'
         const newer = 'workers/gradle-home-v1|Linux-X64|unit-new'
@@ -173,6 +189,7 @@ if (args[2] === '-') {
         await expect(cache.restore(paths(home), key, [])).rejects.toThrow()
         expect(await fs.readFile(path.join(home, 'caches/modules-2/library.jar'), 'utf8')).toBe('local')
         expect(await fs.readdir(process.env.RUNNER_TEMP!)).toEqual([])
+        expect((await fs.readdir(home)).sort()).toEqual(['caches', 'wrapper'])
     })
 
     it('leaves local state intact even if a failing transfer emitted a complete archive', async () => {

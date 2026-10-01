@@ -38,10 +38,14 @@ export class NativeS3Cache {
         const layout = archiveLayout(paths)
         const work = await fs.mkdtemp(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'gradle-s3-'))
         const start = performance.now()
+        let staging: string | undefined
         try {
             const tools = await prepareTools(work, !!nativeKey)
-            const staging = path.join(work, 'restore')
-            await fs.mkdir(staging)
+            // Stage on the target filesystem so promotion normally uses rename rather
+            // than copying every restored file from the runner's temporary mount.
+            await fs.mkdir(layout.root, {recursive: true})
+            staging = await fs.mkdtemp(path.join(layout.root, '.gradle-s3-'))
+            const extractionStart = performance.now()
             const bytes = await runPipeline(
                 [
                     {program: tools.aws, args: ['s3', 'cp', this.uri(objectKey), '-', '--only-show-errors']},
@@ -54,6 +58,10 @@ export class NativeS3Cache {
                 undefined,
                 0
             )
+            core.info(
+                `Native S3 cache download and extraction: ${bytes} compressed bytes in ${elapsed(extractionStart)}s.`
+            )
+            const promotionStart = performance.now()
 
             // Do not replace local state until every process, including the transfer, succeeded.
             const archiveRoot = nativeKey ? staging : await findLegacyRoot(staging, layout.entries)
@@ -83,11 +91,13 @@ export class NativeS3Cache {
                     })
                 }
             }
+            core.info(`Native S3 cache promotion completed in ${elapsed(promotionStart)}s.`)
             const restoredKey = nativeKey ? this.logicalKey(objectKey) : objectKey
             core.saveState(legacyStateKey(key), !nativeKey)
             core.info(`Native S3 cache restored ${objectKey}: ${bytes} compressed bytes in ${elapsed(start)}s.`)
             return restoredKey
         } finally {
+            if (staging) await fs.rm(staging, {recursive: true, force: true})
             await fs.rm(work, {recursive: true, force: true})
         }
     }
