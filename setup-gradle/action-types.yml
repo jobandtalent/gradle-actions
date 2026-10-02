@@ -170,6 +170,28 @@ inputs:
   github-token:
     type: string
 
+  # AWS inputs
+  aws-s3-bucket:
+    type: string
+
+  aws-s3-cache-transport:
+    type: enum
+    allowed-values:
+      - legacy
+      - native
+
+  aws-access-key-id:
+    type: string
+
+  aws-secret-access-key:
+    type: string
+
+  aws-session-token:
+    type: string
+
+  aws-region:
+    type: string
+
 outputs:
   build-scan-url:
     type: string
