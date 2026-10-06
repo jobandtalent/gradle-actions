@@ -454,13 +454,50 @@ The hash is derived from the following file patterns:
 
 Unlike the Enhanced Caching provider, Basic Caching does not use restore keys. If no exact cache key match is found, the cache starts empty. This means that when you update a dependency or change a build file, the next build will re-download all dependencies and write a fresh cache entry.
 
+### S3 storage in this fork
+
+`aws-s3-bucket` selects the fork's basic S3 backend, which caches the full `caches`
+and `wrapper` directories with the existing logical keys and restore prefixes.
+Legacy Node tar/gzip remains the default. Opt in per project:
+
+```yaml
+- name: Setup Gradle
+  uses: jobandtalent/gradle-actions/setup-gradle@<tested-commit>
+  with:
+    aws-s3-bucket: ${{ secrets.AWS_S3_BUCKET_PRD }}
+    aws-s3-cache-transport: native
+    cache-read-only: true
+  env:
+    GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ vars.GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX }}
+```
+
+Native saves stream `tar` → `zstd -T0 -3` → AWS CLI. Restores extract beside the
+Gradle cache and promote files only after all tools succeed. Failed transfers or
+decoding leave local state intact. Logs report compressed bytes and elapsed time.
+
+New objects use `<project-prefix>native-zstd-v1/<logical-key-without-prefix>`.
+Readers prefer matching native objects, then try legacy gzip archives; a failed
+selected restore does not try another archive. Writable jobs migrate legacy
+restores, including exact matches. Read-only jobs never upload. Legacy archives
+remain available when switching back; S3 lifecycle rules handle retention.
+
+Linux x64 automatically installs missing zstd and AWS CLI. Other runners must
+provide them; tar and gzip must already be installed. Action credentials/region
+or the AWS environment configure both SDK lookups and CLI transfers. Readers need
+S3 list/get permissions; writers also need put access.
+
+Fresh seeding uses `cache-write-only: true` after clearing local cache directories,
+then a representative Gradle build. It skips restore and avoids publishing when a
+recorded Gradle build fails. Cache key policy remains project-owned; existing
+`GRADLE_BUILD_ACTION_CACHE_KEY_*` overrides can share a build-input fingerprint
+between seed and PR jobs instead of using commit SHA.
+
 ### Limitations
 
 The basic provider does not support the following Enhanced Caching features:
 - **Cache cleanup** (`cache-cleanup`): Stale entries are not automatically removed.
 - **Deduplication**: The entire `caches` and `wrapper` directories are stored as a single cache entry, without deduplication of individual artifacts.
 - **Include/exclude paths** (`gradle-home-cache-includes` / `gradle-home-cache-excludes`): The cached paths are fixed.
-- **Write-only mode** (`cache-write-only`): Not available with basic caching.
 - **Overwrite existing** (`cache-overwrite-existing`): Not available with basic caching.
 - **Strict cache matching** (`gradle-home-cache-strict-match`): Not applicable since restore keys are not used.
 
