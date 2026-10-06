@@ -19,16 +19,14 @@ concurrency:
 
 jobs:
   update-dist:
-    # Only publish in the upstream repository and our maintained fork.
-    if: github.repository == 'gradle/actions' || github.repository == 'jobandtalent/gradle-actions'
+    # Only update dist in our maintained repository.
+    if: github.repository == 'jobandtalent/gradle-actions'
     permissions:
       contents: write
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
 
     - name: Set up Node.js
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -37,42 +35,20 @@ jobs:
         cache: npm
         cache-dependency-path: sources/package-lock.json
 
-    - name: Install Develocity npm agent
-      if: github.repository == 'gradle/actions'
-      run: |
-        npm exec -y -- pacote extract @gradle-tech/develocity-agent@3.0.1 ~/.node_libraries/@gradle-tech/develocity-agent
-
     - name: Install npm dependencies
       run: |
         npm clean-install
       working-directory: sources
-      env:
-        NODE_OPTIONS: ${{ github.repository == 'gradle/actions' && '-r @gradle-tech/develocity-agent/preload' || '' }}
-        DEVELOCITY_ACCESS_KEY: '${{ secrets.DV_SOLUTIONS_ACCESS_KEY }}'
 
     - name: Build distribution
       run: |
         npm run check
         npm run compile
       working-directory: sources
-      env:
-        NODE_OPTIONS: ${{ github.repository == 'gradle/actions' && '-r @gradle-tech/develocity-agent/preload' || '' }}
-        DEVELOCITY_URL: 'https://ge.solutions-team.gradle.com'
-        DEVELOCITY_ACCESS_KEY: '${{ secrets.DV_SOLUTIONS_ACCESS_KEY }}'
 
     - name: Copy the generated sources/dist directory to the top-level dist
       run: |
         cp -r sources/dist .
-
-    - name: Import GPG key to sign commits
-      if: github.repository == 'gradle/actions'
-      uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
-      with:
-        gpg_private_key: ${{ secrets.GH_BOT_PGP_PRIVATE_KEY }}
-        passphrase: ${{ secrets.GH_BOT_PGP_PASSPHRASE }}
-        git_user_signingkey: true
-        git_commit_gpgsign: true
-        git_config_global: true
 
     # Commit and push changes; has no effect if the files did not change
     # Important: The push event will not trigger any other workflows, see
@@ -80,8 +56,8 @@ jobs:
     - name: Commit & push changes
       uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
       with:
-        commit_author: ${{ github.repository == 'gradle/actions' && 'bot-githubaction <bot-githubaction@gradle.com>' || 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>' }}
-        commit_user_name: ${{ github.repository == 'gradle/actions' && 'bot-githubaction' || 'github-actions[bot]' }}
-        commit_user_email: ${{ github.repository == 'gradle/actions' && 'bot-githubaction@gradle.com' || '41898282+github-actions[bot]@users.noreply.github.com' }}
+        commit_author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+        commit_user_name: github-actions[bot]
+        commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
         commit_message: '[bot] Update dist directory'
         file_pattern: dist
