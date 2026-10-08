@@ -14,6 +14,25 @@ permissions:
   contents: read
 
 jobs:
+  develocity-credentials:
+    if: ${{ ! github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+    - name: Check Develocity credentials
+      id: check
+      shell: bash
+      env:
+        DEVELOCITY_ACCESS_KEY: ${{ secrets.DV_SOLUTIONS_ACCESS_KEY }}
+      run: |
+        if [ -n "$DEVELOCITY_ACCESS_KEY" ]; then
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Skipping Develocity injection tests: DV_SOLUTIONS_ACCESS_KEY is not configured."
+        fi
+
   build-scan-publish:
     uses: ./.github/workflows/integ-test-build-scan-publish.yml
     with:
@@ -21,7 +40,8 @@ jobs:
       skip-dist: ${{ inputs.skip-dist }}
 
   develocity-injection:
-    if: ${{ ! github.event.pull_request.head.repo.fork }}
+    needs: develocity-credentials
+    if: ${{ needs.develocity-credentials.outputs.available == 'true' }}
     uses: ./.github/workflows/integ-test-inject-develocity.yml
     with:
       skip-dist: ${{ inputs.skip-dist }}
