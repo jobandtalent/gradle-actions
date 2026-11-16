@@ -458,14 +458,13 @@ Unlike the Enhanced Caching provider, Basic Caching does not use restore keys. I
 
 `aws-s3-bucket` selects the fork's basic S3 backend, which caches the full `caches`
 and `wrapper` directories with the existing logical keys and restore prefixes.
-Legacy Node tar/gzip remains the default. Opt in per project:
+The default native transport uses tar, zstd and AWS CLI:
 
 ```yaml
 - name: Setup Gradle
   uses: jobandtalent/gradle-actions/setup-gradle@<tested-commit>
   with:
     aws-s3-bucket: ${{ secrets.AWS_S3_BUCKET_PRD }}
-    aws-s3-cache-transport: native
     cache-read-only: true
   env:
     GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: ${{ vars.GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX }}
@@ -485,6 +484,9 @@ Linux x64 automatically installs missing zstd and AWS CLI. Other runners must
 provide them; tar and gzip must already be installed. Action credentials/region
 or the AWS environment configure both SDK lookups and CLI transfers. Readers need
 S3 list/get permissions; writers also need put access.
+
+To retain the Node tar/gzip transport, set `aws-s3-cache-transport: legacy`.
+The transport setting only applies when `aws-s3-bucket` is configured.
 
 Fresh seeding uses `cache-write-only: true` after clearing local cache directories,
 then a representative Gradle build. It skips restore and avoids publishing when a

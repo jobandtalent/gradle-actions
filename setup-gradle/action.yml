@@ -246,10 +246,10 @@ inputs:
   aws-s3-cache-transport:
     description: |
       S3 archive transport: 'legacy' uses the existing Node tar/gzip implementation.
-      'native' streams full cache archives with system tar, zstd and AWS CLI, in an isolated native-zstd-v1 namespace.
+      'native' (default) streams full cache archives with system tar, zstd and AWS CLI, in an isolated native-zstd-v1 namespace.
       Only used when aws-s3-bucket is set. Native transport installs missing tools on Linux x64 runners.
     required: false
-    default: 'legacy'
+    default: 'native'
 
   aws-access-key-id:
     description: An AWS access key id to access the bucket. Falls back to AWS_ACCESS_KEY_ID when omitted.

@@ -78,7 +78,7 @@ export function getInputS3Region(): string | undefined {
 }
 
 export function getInputS3Transport(): 'legacy' | 'native' {
-    const transport = core.getInput('aws-s3-cache-transport') || 'legacy'
+    const transport = core.getInput('aws-s3-cache-transport') || 'native'
     if (transport !== 'legacy' && transport !== 'native') {
         throw new Error('aws-s3-cache-transport must be legacy or native.')
     }
