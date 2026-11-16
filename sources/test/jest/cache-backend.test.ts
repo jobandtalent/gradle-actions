@@ -4,6 +4,7 @@ import * as cacheBackend from '../../src/cache-backend'
 
 const inputEnvKeys = [
     'INPUT_AWS-S3-BUCKET',
+    'INPUT_AWS-S3-CACHE-TRANSPORT',
     'INPUT_AWS-ACCESS-KEY-ID',
     'INPUT_AWS-SECRET-ACCESS-KEY',
     'INPUT_AWS-SESSION-TOKEN',
@@ -23,6 +24,12 @@ describe('cache backend configuration', () => {
 
     it('returns no bucket name when S3 inputs are not configured', () => {
         expect(cacheBackend.getInputS3BucketName()).toBeUndefined()
+    })
+
+    it('defaults to native S3 transport and permits an explicit legacy override', () => {
+        expect(cacheBackend.getInputS3Transport()).toBe('native')
+        process.env['INPUT_AWS-S3-CACHE-TRANSPORT'] = 'legacy'
+        expect(cacheBackend.getInputS3Transport()).toBe('legacy')
     })
 
     it('prefers explicit action inputs over environment variables', () => {
